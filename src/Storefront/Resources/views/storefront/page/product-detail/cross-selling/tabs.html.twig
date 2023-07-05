@@ -11,9 +11,10 @@
                             <li class="nav-item">
                                 <a class="nav-link product-detail-tab-navigation-link{% if loop.first %} active{% endif %}"
                                    id="cs-{{ id }}-tab"
-                                   {{ dataBsToggleAttr }}="tab"
+                                   data-bs-toggle="tab"
                                    href="#cs-{{ id }}-tab-pane"
                                    role="tab"
+                                   title="{{ item.crossSelling.name }}"
                                    aria-controls="cs-{{ id }}-tab-pane"
                                    aria-selected="true">
                                     {{ item.crossSelling.translated.name }}
@@ -40,7 +41,7 @@
                                  aria-labelledby="cs-{{ id }}-tab">
                                 {% set config = {
                                     'title': {
-                                        'value': item.crossSelling.name
+                                        'value': item.crossSelling.name ?: item.crossSelling.translated.name
                                     },
                                     'border': {
                                         'value': false

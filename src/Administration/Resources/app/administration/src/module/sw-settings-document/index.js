@@ -1,17 +1,20 @@
-import './page/sw-settings-document-list';
-import './page/sw-settings-document-detail';
-
 import './acl';
+
+/* eslint-disable max-len, sw-deprecation-rules/private-feature-declarations */
+Shopware.Component.register('sw-settings-document-list', () => import('./page/sw-settings-document-list'));
+Shopware.Component.register('sw-settings-document-detail', () => import('./page/sw-settings-document-detail'));
+/* eslint-enable max-len, sw-deprecation-rules/private-feature-declarations */
 
 const { Module } = Shopware;
 
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
 Module.register('sw-settings-document', {
     type: 'core',
     name: 'settings-document',
     title: 'sw-settings-document.general.mainMenuItemGeneral',
     description: 'sw-settings-document.general.description',
     color: '#9AA8B5',
-    icon: 'default-documentation-file',
+    icon: 'regular-cog',
     favicon: 'icon-module-settings.png',
     entity: 'document',
 
@@ -49,6 +52,6 @@ Module.register('sw-settings-document', {
         group: 'shop',
         to: 'sw.settings.document.index',
         privilege: 'document.viewer',
-        icon: 'default-documentation-file',
+        icon: 'regular-file-text',
     },
 });

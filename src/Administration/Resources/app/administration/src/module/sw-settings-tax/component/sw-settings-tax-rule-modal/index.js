@@ -1,10 +1,15 @@
 import template from './sw-settings-tax-rule-modal.html.twig';
 
-const { Component, Context } = Shopware;
+/**
+ * @package customer-order
+ */
+
+const { Context } = Shopware;
 const { Criteria } = Shopware.Data;
 const { mapPropertyErrors } = Shopware.Component.getComponentHelper();
 
-Component.register('sw-settings-tax-rule-modal', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory'],
@@ -44,8 +49,14 @@ Component.register('sw-settings-tax-rule-modal', {
             return this.$options.components[`sw-settings-tax-rule-type-${subComponentName}`];
         },
         taxRuleTypeCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.addSorting(Criteria.sort('position', 'ASC'));
+
+            return criteria;
+        },
+        countryCriteria() {
+            const criteria = new Criteria(1, 25);
+            criteria.addSorting(Criteria.sort('name', 'ASC', false));
 
             return criteria;
         },
@@ -85,4 +96,4 @@ Component.register('sw-settings-tax-rule-modal', {
             });
         },
     },
-});
+};

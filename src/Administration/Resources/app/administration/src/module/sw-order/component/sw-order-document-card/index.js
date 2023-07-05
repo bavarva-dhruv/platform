@@ -1,16 +1,18 @@
 import { DocumentEvents } from 'src/core/service/api/document.api.service';
+import { searchRankingPoint } from 'src/app/service/search-ranking.service';
 import template from './sw-order-document-card.html.twig';
 import './sw-order-document-card.scss';
-import '../sw-order-document-settings-invoice-modal';
-import '../sw-order-document-settings-storno-modal';
-import '../sw-order-document-settings-delivery-note-modal';
-import '../sw-order-document-settings-credit-note-modal';
-import '../sw-order-document-settings-modal';
 
-const { Component, Mixin } = Shopware;
+/**
+ * @package customer-order
+ */
+
+const { Mixin } = Shopware;
 const { Criteria } = Shopware.Data;
+const { mapGetters } = Shopware.Component.getComponentHelper();
 
-Component.register('sw-order-document-card', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -65,6 +67,10 @@ Component.register('sw-order-document-card', {
     },
 
     computed: {
+        ...mapGetters('swOrderDetail', [
+            'isEditing',
+        ]),
+
         creditItems() {
             const items = [];
 
@@ -111,10 +117,22 @@ Component.register('sw-order-document-card', {
         documentCriteria() {
             const criteria = new Criteria(this.page, this.limit);
             criteria.addSorting(Criteria.sort('createdAt', 'DESC'));
-            criteria.setTerm(this.term);
             criteria.addAssociation('documentType');
             criteria.addFilter(Criteria.equals('order.id', this.order.id));
-            criteria.addFilter(Criteria.equals('order.versionId', this.order.versionId));
+
+            if (!this.term) {
+                return criteria;
+            }
+
+            criteria.setTerm(this.term);
+            criteria.addQuery(
+                Criteria.contains('config.documentDate', this.term),
+                searchRankingPoint.HIGH_SEARCH_RANKING,
+            );
+            criteria.addQuery(
+                Criteria.equals('config.documentNumber', this.term),
+                searchRankingPoint.HIGH_SEARCH_RANKING,
+            );
 
             return criteria;
         },
@@ -159,6 +177,28 @@ Component.register('sw-order-document-card', {
 
         isDataLoading() {
             return this.isLoading || this.documentsLoading || this.cardLoading;
+        },
+
+        showCardFilter() {
+            return this.order?.documents?.length > 0;
+        },
+
+        showCreateDocumentButton() {
+            return !this.order?.documents?.length;
+        },
+
+        emptyStateTitle() {
+            return this.order?.documents?.length > 0
+                ? this.$tc('sw-order.documentCard.messageNoDocumentFound')
+                : this.$tc('sw-order.documentCard.messageEmptyTitle');
+        },
+
+        tooltipCreateDocumentButton() {
+            if (!this.acl.can('document.viewer')) {
+                return this.$tc('sw-privileges.tooltip.warning');
+            }
+
+            return this.$tc('sw-order.documentTab.tooltipSaveBeforeCreateDocument');
         },
     },
 
@@ -264,11 +304,7 @@ Component.register('sw-order-document-card', {
             this.currentDocumentType = null;
         },
 
-        onPrepareDocument(documentType) {
-            if (!this.feature.isActive('FEATURE_NEXT_7530')) {
-                this.currentDocumentType = documentType;
-            }
-
+        onPrepareDocument() {
             this.showModal = true;
         },
 
@@ -339,8 +375,39 @@ Component.register('sw-order-document-card', {
                     file,
                 );
 
-                if (response && additionalAction === 'download') {
-                    this.downloadDocument(response.data.documentId, response.data.documentDeepLink);
+                if (!response) {
+                    return;
+                }
+
+                const documentId = Array.isArray(response)
+                    ? response[0].documentId
+                    : response?.data?.documentId;
+
+                const documentDeepLink = Array.isArray(response)
+                    ? response[0].documentDeepLink
+                    : response?.data?.documentDeepLink;
+
+                if (params.documentMediaFileId) {
+                    const documentData = await this.documentRepository.get(documentId, Shopware.Context.api);
+                    documentData.documentMediaFileId = params.documentMediaFileId;
+                    await this.documentRepository.save(documentData);
+                }
+
+                if (additionalAction === 'download') {
+                    this.downloadDocument(documentId, documentDeepLink);
+                } else if (additionalAction === 'send') {
+                    const criteria = new Criteria(null, null);
+                    criteria.addAssociation('documentType');
+
+                    this.documentRepository.get(documentId, Shopware.Context.api, criteria)
+                        .then((documentData) => {
+                            if (!documentData) {
+                                return;
+                            }
+
+                            this.sendDocument = documentData;
+                            this.showSendDocumentModal = true;
+                        });
                 }
             } finally {
                 this.isLoadingDocument = false;
@@ -350,7 +417,7 @@ Component.register('sw-order-document-card', {
         onPreview(params) {
             this.isLoadingPreview = true;
 
-            this.documentService.getDocumentPreview(
+            return this.documentService.getDocumentPreview(
                 this.order.id,
                 this.order.deepLinkCode,
                 this.currentDocumentType.technicalName,
@@ -365,6 +432,8 @@ Component.register('sw-order-document-card', {
                 }
 
                 this.isLoadingPreview = false;
+
+                return response;
             });
         },
 
@@ -419,4 +488,4 @@ Component.register('sw-order-document-card', {
             }
         },
     },
-});
+};

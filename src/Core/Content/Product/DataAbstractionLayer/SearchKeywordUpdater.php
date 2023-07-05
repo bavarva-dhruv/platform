@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\Aggregate\ProductKeywordDictionary\ProductKeywordDictionaryDefinition;
 use Shopware\Core\Content\Product\Aggregate\ProductSearchKeyword\ProductSearchKeywordDefinition;
@@ -14,46 +15,36 @@ use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\RepositoryIterator;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\AssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NandFilter;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageCollection;
 use Shopware\Core\System\Language\LanguageEntity;
+use Symfony\Contracts\Service\ResetInterface;
 
-class SearchKeywordUpdater
+#[Package('core')]
+class SearchKeywordUpdater implements ResetInterface
 {
-    private Connection $connection;
-
-    private EntityRepositoryInterface $languageRepository;
-
-    private EntityRepositoryInterface $productRepository;
-
-    private ProductSearchKeywordAnalyzerInterface $analyzer;
-
-    private EntityRepositoryInterface $productSearchConfigFieldRepository;
-
     /**
      * @var array[]
      */
-    private $config = [];
+    private array $config = [];
 
+    /**
+     * @internal
+     */
     public function __construct(
-        Connection $connection,
-        EntityRepositoryInterface $languageRepository,
-        EntityRepositoryInterface $productRepository,
-        ProductSearchKeywordAnalyzerInterface $analyzer,
-        EntityRepositoryInterface $productSearchConfigFieldRepository
+        private readonly Connection $connection,
+        private readonly EntityRepository $languageRepository,
+        private readonly EntityRepository $productRepository,
+        private readonly ProductSearchKeywordAnalyzerInterface $analyzer
     ) {
-        $this->connection = $connection;
-        $this->languageRepository = $languageRepository;
-        $this->productRepository = $productRepository;
-        $this->analyzer = $analyzer;
-        $this->productSearchConfigFieldRepository = $productSearchConfigFieldRepository;
     }
 
     public function update(array $ids, Context $context): void
@@ -85,15 +76,17 @@ class SearchKeywordUpdater
         }
     }
 
+    public function reset(): void
+    {
+        $this->config = [];
+    }
+
     /**
      * @return ProductEntity[]
      */
     private function updateLanguage(array $ids, Context $context, array $existingProducts): array
     {
-        $configFields = [];
-        if ($this->productSearchConfigFieldRepository !== null) {
-            $configFields = $this->getConfigFields($context->getLanguageId());
-        }
+        $configFields = $this->getConfigFields($context->getLanguageId());
 
         $versionId = Uuid::fromHexToBytes($context->getVersionId());
         $languageId = Uuid::fromHexToBytes($context->getLanguageId());
@@ -170,10 +163,10 @@ class SearchKeywordUpdater
         ];
 
         RetryableQuery::retryable($this->connection, function () use ($params): void {
-            $this->connection->executeUpdate(
+            $this->connection->executeStatement(
                 'DELETE FROM product_search_keyword WHERE product_id IN (:ids) AND language_id = :language AND version_id = :versionId',
                 $params,
-                ['ids' => Connection::PARAM_STR_ARRAY]
+                ['ids' => ArrayParameterType::STRING]
             );
         });
     }
@@ -211,9 +204,7 @@ class SearchKeywordUpdater
         foreach ($accessors as $accessor) {
             $fields = EntityDefinitionQueryHelper::getFieldsOfAccessor($definition, $accessor);
 
-            $fields = array_filter($fields, function (Field $field) {
-                return $field instanceof AssociationField;
-            });
+            $fields = array_filter($fields, fn (Field $field) => $field instanceof AssociationField);
 
             if (empty($fields)) {
                 continue;
@@ -221,9 +212,7 @@ class SearchKeywordUpdater
 
             $lastAssociationField = $fields[\count($fields) - 1];
 
-            $path = array_map(function (Field $field) {
-                return $field->getPropertyName();
-            }, $fields);
+            $path = array_map(fn (Field $field) => $field->getPropertyName(), $fields);
 
             $association = implode('.', $path);
             if ($criteria->hasAssociation($association)) {
@@ -263,21 +252,17 @@ class SearchKeywordUpdater
         $query->andWhere('config.language_id IN (:languageIds)');
         $query->andWhere('configField.searchable = 1');
 
-        $query->setParameter('languageIds', Uuid::fromHexToBytesList([$languageId, Defaults::LANGUAGE_SYSTEM]), Connection::PARAM_STR_ARRAY);
+        $query->setParameter('languageIds', Uuid::fromHexToBytesList([$languageId, Defaults::LANGUAGE_SYSTEM]), ArrayParameterType::STRING);
 
-        $all = $query->execute()->fetchAll();
+        $all = $query->executeQuery()->fetchAllAssociative();
 
-        $fields = array_filter($all, function (array $field) use ($languageId) {
-            return $field['language_id'] === $languageId;
-        });
+        $fields = array_filter($all, fn (array $field) => $field['language_id'] === $languageId);
 
         if (!empty($fields)) {
             return $this->config[$languageId] = $fields;
         }
 
-        $fields = array_filter($all, function (array $field) {
-            return $field['language_id'] === Defaults::LANGUAGE_SYSTEM;
-        });
+        $fields = array_filter($all, fn (array $field) => $field['language_id'] === Defaults::LANGUAGE_SYSTEM);
 
         return $this->config[$languageId] = $fields;
     }
@@ -295,9 +280,7 @@ class SearchKeywordUpdater
         return array_filter(array_merge(
             [$defaultLanguage],
             $languages->filterByProperty('parentId', null)->getElements(),
-            $languages->filter(function (LanguageEntity $language) {
-                return $language->getParentId() !== null;
-            })->getElements()
+            $languages->filter(fn (LanguageEntity $language) => $language->getParentId() !== null)->getElements()
         ));
     }
 }

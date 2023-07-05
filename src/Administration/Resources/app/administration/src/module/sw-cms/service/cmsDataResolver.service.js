@@ -27,7 +27,11 @@ function resolve(page) {
         cmsElements = cmsService.getCmsElementRegistry();
 
         page.sections.forEach((section) => {
+            initVisibility(section);
+
             section.blocks.forEach((block) => {
+                initVisibility(block);
+
                 block.slots.forEach((slot) => {
                     slots[slot.id] = slot;
                     initSlotConfig(slot);
@@ -88,6 +92,27 @@ function resolve(page) {
     });
 }
 
+function initVisibility(element) {
+    if (!element.visibility) {
+        element.visibility = {};
+    }
+
+    const visibilityProperties = ['mobile', 'tablet', 'desktop'];
+
+    visibilityProperties.forEach((key) => {
+        if (typeof element.visibility[key] === 'boolean') {
+            return;
+        }
+
+        element.visibility[key] = true;
+    });
+}
+
+
+/**
+ * @private
+ * @package content
+ */
 function initSlotConfig(slot) {
     const slotConfig = cmsElements[slot.type];
     const defaultConfig = slotConfig.defaultConfig || {};
@@ -95,6 +120,10 @@ function initSlotConfig(slot) {
     slot.config = merge(cloneDeep(defaultConfig), slot.translated.config || {});
 }
 
+/**
+ * @private
+ * @package content
+ */
 function initSlotDefaultData(slot) {
     const slotConfig = cmsElements[slot.type];
     const defaultData = slotConfig.defaultData || {};
@@ -102,6 +131,10 @@ function initSlotDefaultData(slot) {
     slot.data = merge(cloneDeep(defaultData), slot.data || {});
 }
 
+/**
+ * @private
+ * @package content
+ */
 function optimizeCriteriaObjects(slotEntityCollection) {
     const directReads = {};
     const searches = {};
@@ -132,6 +165,10 @@ function optimizeCriteriaObjects(slotEntityCollection) {
     };
 }
 
+/**
+ * @private
+ * @package content
+ */
 function canBeMerged(entity) {
     if (!entity.searchCriteria) {
         return true;
@@ -164,7 +201,7 @@ function fetchByIdentifier(directReads) {
 
     Object.entries(directReads).forEach(([entityName, entityIds]) => {
         if (entityIds.length > 0) {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.setIds(entityIds);
 
             const repo = getRepository(entityName);
@@ -187,6 +224,10 @@ function fetchByIdentifier(directReads) {
     });
 }
 
+/**
+ * @private
+ * @package content
+ */
 function fetchByCriteria(searches) {
     const results = {};
     const fetchPromises = [];
@@ -225,6 +266,10 @@ function fetchByCriteria(searches) {
     });
 }
 
+/**
+ * @private
+ * @package content
+ */
 function getRepository(entity) {
     if (repositories[entity]) {
         return repositories[entity];

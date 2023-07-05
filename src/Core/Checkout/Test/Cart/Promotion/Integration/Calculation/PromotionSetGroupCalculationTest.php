@@ -4,16 +4,14 @@ namespace Shopware\Core\Checkout\Test\Cart\Promotion\Integration\Calculation;
 
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\Cart;
-use Shopware\Core\Checkout\Cart\Exception\InvalidPayloadException;
-use Shopware\Core\Checkout\Cart\Exception\InvalidQuantityException;
-use Shopware\Core\Checkout\Cart\Exception\LineItemNotStackableException;
-use Shopware\Core\Checkout\Cart\Exception\MixedLineItemTypeException;
+use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Promotion\Aggregate\PromotionDiscount\PromotionDiscountEntity;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\PromotionFixtureBuilder;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionIntegrationTestBehaviour;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionTestFixtureBehaviour;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Util\Random;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -21,31 +19,23 @@ use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class PromotionSetGroupCalculationTest extends TestCase
 {
     use IntegrationTestBehaviour;
-    use PromotionTestFixtureBehaviour;
     use PromotionIntegrationTestBehaviour;
+    use PromotionTestFixtureBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $productRepository;
+    protected EntityRepository $productRepository;
 
-    /**
-     * @var CartService
-     */
-    protected $cartService;
+    protected CartService $cartService;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $promotionRepository;
+    protected EntityRepository $promotionRepository;
 
-    /**
-     * @var SalesChannelContext
-     */
-    private $context;
+    private SalesChannelContext $context;
 
     protected function setUp(): void
     {
@@ -70,10 +60,7 @@ class PromotionSetGroupCalculationTest extends TestCase
      *
      * @group promotions
      *
-     * @throws InvalidPayloadException
-     * @throws InvalidQuantityException
-     * @throws LineItemNotStackableException
-     * @throws MixedLineItemTypeException
+     * @throws CartException
      */
     public function testPercentageOnMultipleItemsAndSubsetQuantities(): void
     {
@@ -113,10 +100,7 @@ class PromotionSetGroupCalculationTest extends TestCase
      *
      * @group promotions
      *
-     * @throws InvalidPayloadException
-     * @throws InvalidQuantityException
-     * @throws LineItemNotStackableException
-     * @throws MixedLineItemTypeException
+     * @throws CartException
      */
     public function testAbsoluteOnMultipleItemsAndSubsetQuantities(): void
     {
@@ -163,10 +147,7 @@ class PromotionSetGroupCalculationTest extends TestCase
      *
      * @group promotions
      *
-     * @throws InvalidPayloadException
-     * @throws InvalidQuantityException
-     * @throws LineItemNotStackableException
-     * @throws MixedLineItemTypeException
+     * @throws CartException
      */
     public function testFixedUnitPriceOnMultipleItemsAndSubsetQuantities(): void
     {
@@ -211,13 +192,9 @@ class PromotionSetGroupCalculationTest extends TestCase
      * We give 50 EUR fixed price for the whole package, which means the customer has to
      * pay 50 EUR + product 2.
      *
-     * @test
      * @group promotions
      *
-     * @throws InvalidPayloadException
-     * @throws InvalidQuantityException
-     * @throws LineItemNotStackableException
-     * @throws MixedLineItemTypeException
+     * @throws CartException
      */
     public function testFixedPriceOnMultipleItemsAndSubsetQuantities(): void
     {

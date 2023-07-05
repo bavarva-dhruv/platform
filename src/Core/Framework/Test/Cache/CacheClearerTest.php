@@ -14,13 +14,15 @@ use Shopware\Core\Kernel;
 use Symfony\Component\Finder\Finder;
 
 /**
+ * @internal
+ *
  * @group skip-paratest
  * @group slow
  */
 class CacheClearerTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
     public function testCleanupOldKernelDirectories(): void
     {

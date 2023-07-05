@@ -1,13 +1,18 @@
 <?php declare(strict_types=1);
 
-namespace Shopware\Core\Checkout\Test\Cart\LineItem\Group\Exception;
+namespace Shopware\Core\Checkout\Test\Cart\LineItem\Group;
 
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\LineItem\Group\LineItemGroupDefinition;
 use Shopware\Core\Checkout\Test\Cart\LineItem\Group\Helpers\Traits\RulesTestFixtureBehaviour;
 use Shopware\Core\Content\Rule\RuleCollection;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class LineItemGroupDefinitionTest extends TestCase
 {
     use RulesTestFixtureBehaviour;
@@ -20,7 +25,6 @@ class LineItemGroupDefinitionTest extends TestCase
      * The id can be any random string, or the id from
      * an entity object, if built from that one.
      *
-     * @test
      * @group lineitemgroup
      */
     public function testPackagerKeyId(): void
@@ -34,7 +38,6 @@ class LineItemGroupDefinitionTest extends TestCase
      * This test verifies that our property is correctly
      * assigned and returned in its getter.
      *
-     * @test
      * @group lineitemgroup
      */
     public function testPackagerKeyProperty(): void
@@ -48,7 +51,6 @@ class LineItemGroupDefinitionTest extends TestCase
      * This test verifies that our property is correctly
      * assigned and returned in its getter.
      *
-     * @test
      * @group lineitemgroup
      */
     public function testValueProperty(): void
@@ -62,7 +64,6 @@ class LineItemGroupDefinitionTest extends TestCase
      * This test verifies that our property is correctly
      * assigned and returned in its getter.
      *
-     * @test
      * @group lineitemgroup
      */
     public function tesSorterKeyProperty(): void
@@ -76,7 +77,6 @@ class LineItemGroupDefinitionTest extends TestCase
      * This test verifies that our property is correctly
      * assigned and returned in its getter.
      *
-     * @test
      * @group lineitemgroup
      */
     public function testRulesProperty(): void

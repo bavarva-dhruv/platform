@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Checkout\Test\Cart\LineItem\Group\RuleMatcher;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\LineItem\Group\RulesMatcher\AnyRuleLineItemMatcher;
 use Shopware\Core\Checkout\Cart\LineItem\Group\RulesMatcher\AnyRuleMatcher;
@@ -20,19 +21,19 @@ use Shopware\Core\Framework\Rule\Container\OrRule;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
 class AnyRuleMatcherTest extends TestCase
 {
-    use RulesTestFixtureBehaviour;
-    use LineItemTestFixtureBehaviour;
     use LineItemGroupTestFixtureBehaviour;
+    use LineItemTestFixtureBehaviour;
+    use RulesTestFixtureBehaviour;
 
     private const KEY_PACKAGER_COUNT = 'PACKAGER_COUNT';
     private const KEY_SORTER_PRICE_ASC = 'PRICE_ASC';
 
-    /**
-     * @var SalesChannelContext
-     */
-    private $context;
+    private MockObject&SalesChannelContext $context;
 
     protected function setUp(): void
     {
@@ -47,7 +48,6 @@ class AnyRuleMatcherTest extends TestCase
      * This means, that only line items with 50 or higher, are matched
      * with a positive result.
      *
-     * @test
      * @group lineitemgroup
      */
     public function testMatchesForSingleRule(): void
@@ -93,7 +93,6 @@ class AnyRuleMatcherTest extends TestCase
      * should get 3 out of our 4 products that match. Only the product with neither quantity nor price condition
      * should not match our group rules.
      *
-     * @test
      * @group lineitemgroup
      */
     public function testMatchesForMultipleRules(): void

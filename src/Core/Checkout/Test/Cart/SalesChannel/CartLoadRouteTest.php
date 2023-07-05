@@ -3,16 +3,17 @@
 namespace Shopware\Core\Checkout\Test\Cart\SalesChannel;
 
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Checkout\Cart\AbstractCartPersister;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartPersister;
-use Shopware\Core\Checkout\Cart\CartPersisterInterface;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\Rule\AlwaysValidRule;
 use Shopware\Core\Checkout\Cart\Rule\CartAmountRule;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\SalesChannelApiTestBehaviour;
@@ -22,8 +23,11 @@ use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
+ * @internal
+ *
  * @group store-api
  */
+#[Package('checkout')]
 class CartLoadRouteTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -33,17 +37,17 @@ class CartLoadRouteTest extends TestCase
 
     private TestDataCollection $ids;
 
-    private EntityRepositoryInterface $productRepository;
+    private EntityRepository $productRepository;
 
-    private EntityRepositoryInterface $paymentMethodRepository;
+    private EntityRepository $paymentMethodRepository;
 
     private AbstractSalesChannelContextFactory $salesChannelFactory;
 
-    private CartPersisterInterface $cartPersister;
+    private AbstractCartPersister $cartPersister;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
-        $this->ids = new TestDataCollection(Context::createDefaultContext());
+        $this->ids = new TestDataCollection();
 
         $this->browser = $this->createCustomSalesChannelBrowser([
             'id' => $this->ids->create('sales-channel'),
@@ -65,7 +69,7 @@ class CartLoadRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(0, $response['price']['totalPrice']);
@@ -74,6 +78,8 @@ class CartLoadRouteTest extends TestCase
 
     /**
      * @dataProvider dataProviderPaymentMethodRule
+     *
+     * @param array<string, string|array<string, string>>|null $ruleConditions
      */
     public function testFilledCart(?array $ruleConditions, int $errorCount): void
     {
@@ -91,9 +97,9 @@ class CartLoadRouteTest extends TestCase
                     ['salesChannelId' => $this->ids->get('sales-channel'), 'visibility' => ProductVisibilityDefinition::VISIBILITY_ALL],
                 ],
             ],
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
 
-        $cart = new Cart('sales-channel', $this->ids->create('token'));
+        $cart = new Cart($this->ids->create('token'));
         $cart->add(new LineItem($this->ids->create('productId'), LineItem::PRODUCT_LINE_ITEM_TYPE, $this->ids->get('productId')));
 
         $context = $this->salesChannelFactory->create($this->ids->get('token'), $this->ids->get('sales-channel'));
@@ -109,7 +115,7 @@ class CartLoadRouteTest extends TestCase
                         $ruleConditions,
                     ],
                 ],
-            ]], $this->ids->context);
+            ]], Context::createDefaultContext());
         }
 
         $this->browser->setServerParameter('HTTP_SW_CONTEXT_TOKEN', $this->ids->get('token'));
@@ -122,7 +128,7 @@ class CartLoadRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(10, $response['price']['totalPrice']);
@@ -131,7 +137,10 @@ class CartLoadRouteTest extends TestCase
         static::assertCount($errorCount, $response['errors']);
     }
 
-    public function dataProviderPaymentMethodRule()
+    /**
+     * @return array<string, array<int|array<string, string|array<string, string>>|null>>
+     */
+    public static function dataProviderPaymentMethodRule(): array
     {
         return [
             'No Rule' => [

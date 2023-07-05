@@ -4,6 +4,9 @@ import './sw-radio-field.scss';
 const { Component, Mixin } = Shopware;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @description radio input field.
  * @status ready

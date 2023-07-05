@@ -15,6 +15,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCustomFieldsTrait;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityIdTrait;
 use Shopware\Core\Framework\DataAbstractionLayer\Pricing\CashRoundingConfig;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\Currency\CurrencyEntity;
 use Shopware\Core\System\Language\LanguageEntity;
 use Shopware\Core\System\SalesChannel\SalesChannelEntity;
@@ -22,10 +23,11 @@ use Shopware\Core\System\StateMachine\Aggregation\StateMachineState\StateMachine
 use Shopware\Core\System\Tag\TagCollection;
 use Shopware\Core\System\User\UserEntity;
 
+#[Package('customer-order')]
 class OrderEntity extends Entity
 {
-    use EntityIdTrait;
     use EntityCustomFieldsTrait;
+    use EntityIdTrait;
 
     /**
      * @var string
@@ -51,6 +53,11 @@ class OrderEntity extends Entity
      * @var string
      */
     protected $billingAddressId;
+
+    /**
+     * @var string
+     */
+    protected $billingAddressVersionId;
 
     /**
      * @var \DateTimeInterface
@@ -193,7 +200,7 @@ class OrderEntity extends Entity
     protected $customerComment;
 
     /**
-     * @var string[]|null
+     * @var array<string>|null
      */
     protected $ruleIds = [];
 
@@ -568,6 +575,9 @@ class OrderEntity extends Entity
         return $this->ruleIds;
     }
 
+    /**
+     * @param array<string>|null $ruleIds
+     */
     public function setRuleIds(?array $ruleIds): void
     {
         $this->ruleIds = $ruleIds;
@@ -641,6 +651,16 @@ class OrderEntity extends Entity
     public function setTotalRounding(?CashRoundingConfig $totalRounding): void
     {
         $this->totalRounding = $totalRounding;
+    }
+
+    public function getBillingAddressVersionId(): string
+    {
+        return $this->billingAddressVersionId;
+    }
+
+    public function setBillingAddressVersionId(string $billingAddressVersionId): void
+    {
+        $this->billingAddressVersionId = $billingAddressVersionId;
     }
 
     private function addChildren(OrderLineItemCollection $lineItems, OrderLineItemCollection $parents): void

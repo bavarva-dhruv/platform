@@ -5,8 +5,13 @@ namespace Shopware\Core\Checkout\Test\Cart\Common;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Rule\RuleScope;
 
+/**
+ * @internal
+ */
 class TrueRule extends Rule
 {
+    final public const RULE_NAME = 'true';
+
     public function match(RuleScope $matchContext): bool
     {
         return true;
@@ -15,10 +20,5 @@ class TrueRule extends Rule
     public function getConstraints(): array
     {
         return [];
-    }
-
-    public function getName(): string
-    {
-        return 'true';
     }
 }

@@ -18,14 +18,14 @@ use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\HttpFoundation\Request;
 
+/**
+ * @internal
+ */
 class ProductDescriptionReviewsTypeDataResolverTest extends TestCase
 {
     use IntegrationTestBehaviour;
 
-    /**
-     * @var ProductDescriptionReviewsCmsElementResolver
-     */
-    private $productDescriptionReviewResolver;
+    private ProductDescriptionReviewsCmsElementResolver $productDescriptionReviewResolver;
 
     protected function setUp(): void
     {

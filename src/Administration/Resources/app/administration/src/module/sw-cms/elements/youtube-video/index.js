@@ -1,7 +1,23 @@
-import './component';
-import './config';
-import './preview';
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-el-preview-youtube-video', () => import('./preview'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-el-config-youtube-video', () => import('./config'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-el-youtube-video', () => import('./component'));
 
+/**
+ * @private
+ * @package content
+ */
 Shopware.Service('cmsService').registerCmsElement({
     name: 'youtube-video',
     label: 'sw-cms.elements.youtubeVideo.label',

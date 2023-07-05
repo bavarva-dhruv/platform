@@ -1,6 +1,18 @@
-import './component';
-import './preview';
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-preview-form', () => import('./preview'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-block-form', () => import('./component'));
 
+/**
+ * @private
+ * @package content
+ */
 Shopware.Service('cmsService').registerCmsBlock({
     name: 'form',
     label: 'sw-cms.blocks.form.form.label',

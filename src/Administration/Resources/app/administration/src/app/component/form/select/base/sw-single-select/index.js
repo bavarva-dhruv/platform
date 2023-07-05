@@ -1,9 +1,16 @@
+/**
+ * @package admin
+ */
+
 import './sw-single-select.scss';
 import template from './sw-single-select.html.twig';
 
 const { Component, Mixin } = Shopware;
 const { debounce, get } = Shopware.Utils;
 
+/**
+ * @deprecated tag:v6.6.0 - Will be private
+ */
 Component.register('sw-single-select', {
     template,
 
@@ -127,6 +134,7 @@ Component.register('sw-single-select', {
             },
             set(newValue) {
                 this.currentValue = this.getKey(newValue, this.valueProperty);
+                this.$emit('item-selected', newValue);
             },
         },
 
@@ -134,11 +142,7 @@ Component.register('sw-single-select', {
          * @returns {Array}
          */
         visibleResults() {
-            if (this.feature.isActive('FEATURE_NEXT_7530')) {
-                return this.results.filter(result => !result.hidden);
-            }
-
-            return this.results;
+            return this.results.filter(result => !result.hidden);
         },
     },
 
@@ -149,6 +153,8 @@ Component.register('sw-single-select', {
 
         onSelectExpanded() {
             this.isExpanded = true;
+            this.$emit('on-open-change', true);
+
             // Always start with a fresh list when opening the result list
             this.results = this.options;
 
@@ -176,6 +182,7 @@ Component.register('sw-single-select', {
             this.$refs.swSelectInput.blur();
             this.searchTerm = '';
             this.itemRecentlySelected = false;
+            this.$emit('on-open-change', false);
             this.isExpanded = false;
         },
 

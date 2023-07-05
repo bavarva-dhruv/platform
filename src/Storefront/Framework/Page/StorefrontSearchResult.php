@@ -4,7 +4,9 @@ namespace Shopware\Storefront\Framework\Page;
 
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
+use Shopware\Core\Framework\Log\Package;
 
+#[Package('storefront')]
 class StorefrontSearchResult extends EntitySearchResult
 {
     /**
@@ -50,7 +52,7 @@ class StorefrontSearchResult extends EntitySearchResult
     {
         $total = $this->getTotal();
 
-        //next page mode fetches only the next pages with, not the exact count
+        // next page mode fetches only the next pages with, not the exact count
         if ($this->getCriteria()->getTotalCountMode() === Criteria::TOTAL_COUNT_MODE_NEXT_PAGES) {
             $total += $this->getCriteria()->getOffset();
         }

@@ -10,37 +10,34 @@ use Shopware\Core\Content\Cms\DataResolver\ResolverContext\ResolverContext;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\InconsistentCriteriaIdsException;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\ArrayEntity;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+#[Package('content')]
 class CmsSlotsDataResolver
 {
     /**
      * @var CmsElementResolverInterface[]
      */
-    private $resolvers;
+    private ?array $resolvers = null;
+
+    private ?array $repositories = null;
 
     /**
-     * @var array
-     */
-    private $repositories;
-
-    /**
-     * @var DefinitionInstanceRegistry
-     */
-    private $definitionRegistry;
-
-    /**
+     * @internal
+     *
      * @param CmsElementResolverInterface[] $resolvers
      */
-    public function __construct(iterable $resolvers, array $repositories, DefinitionInstanceRegistry $definitionRegistry)
-    {
-        $this->definitionRegistry = $definitionRegistry;
-
+    public function __construct(
+        iterable $resolvers,
+        array $repositories,
+        private readonly DefinitionInstanceRegistry $definitionRegistry
+    ) {
         foreach ($repositories as $entityName => $repository) {
             $this->repositories[$entityName] = $repository;
         }
@@ -191,17 +188,17 @@ class CmsSlotsDataResolver
 
     private function canBeMerged(Criteria $criteria): bool
     {
-        //paginated lists must be an own search
+        // paginated lists must be an own search
         if ($criteria->getOffset() !== null || $criteria->getLimit() !== null) {
             return false;
         }
 
-        //sortings must be an own search
+        // sortings must be an own search
         if (\count($criteria->getSorting())) {
             return false;
         }
 
-        //queries must be an own search
+        // queries must be an own search
         if (\count($criteria->getQueries())) {
             return false;
         }
@@ -224,14 +221,14 @@ class CmsSlotsDataResolver
             return false;
         }
 
-        if (empty($filters) && empty($criteria->getIds())) {
+        if (empty($criteria->getIds())) {
             return false;
         }
 
         return true;
     }
 
-    private function getApiRepository(EntityDefinition $definition): EntityRepositoryInterface
+    private function getApiRepository(EntityDefinition $definition): EntityRepository
     {
         return $this->definitionRegistry->getRepository($definition->getEntityName());
     }
@@ -308,9 +305,7 @@ class CmsSlotsDataResolver
                 }
 
                 $ids = $criteria->getIds();
-                $filtered = $entities[$definition]->filter(function (Entity $entity) use ($ids) {
-                    return \in_array($entity->getUniqueIdentifier(), $ids, true);
-                });
+                $filtered = $entities[$definition]->filter(fn (Entity $entity) => \in_array($entity->getUniqueIdentifier(), $ids, true));
 
                 $result->add($key, $filtered);
             }

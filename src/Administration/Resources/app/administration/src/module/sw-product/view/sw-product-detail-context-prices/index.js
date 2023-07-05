@@ -1,11 +1,16 @@
+/*
+ * @package inventory
+ */
+
 import template from './sw-product-detail-context-prices.html.twig';
 import './sw-product-detail-context-prices.scss';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 const { Criteria } = Shopware.Data;
 const { mapState, mapGetters } = Shopware.Component.getComponentHelper();
 
-Component.register('sw-product-detail-context-prices', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory', 'acl', 'feature'],
@@ -19,6 +24,12 @@ Component.register('sw-product-detail-context-prices', {
             type: Boolean,
             required: false,
             default: false,
+        },
+        canSetLoadingRules: {
+            type: Boolean,
+            required: false,
+            // eslint-disable-next-line vue/no-boolean-default
+            default: true,
         },
     },
 
@@ -138,7 +149,7 @@ Component.register('sw-product-detail-context-prices', {
                     allowResize: true,
                     primary: false,
                     rawData: false,
-                    width: '250px',
+                    width: '270px',
                     multiLine: true,
                 };
             });
@@ -168,7 +179,7 @@ Component.register('sw-product-detail-context-prices', {
                     label: 'sw-product.advancedPrices.columnType',
                     visible: true,
                     allowResize: true,
-                    width: '95px',
+                    width: '250px',
                     multiLine: true,
                 },
             ];
@@ -205,7 +216,9 @@ Component.register('sw-product-detail-context-prices', {
                 ]),
             );
 
-            Shopware.State.commit('swProductDetail/setLoading', ['rules', true]);
+            if (this.canSetLoadingRules) {
+                Shopware.State.commit('swProductDetail/setLoading', ['rules', true]);
+            }
             this.ruleRepository.search(ruleCriteria).then((res) => {
                 this.rules = res;
                 this.totalRules = res.total;
@@ -507,4 +520,4 @@ Component.register('sw-product-detail-context-prices', {
             };
         },
     },
-});
+};

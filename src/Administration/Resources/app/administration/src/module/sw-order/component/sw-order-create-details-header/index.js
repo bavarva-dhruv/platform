@@ -1,9 +1,13 @@
 import template from './sw-order-create-details-header.html.twig';
 
-const { Component } = Shopware;
+/**
+ * @package customer-order
+ */
+
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-order-create-details-header', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     props: {
@@ -74,4 +78,4 @@ Component.register('sw-order-create-details-header', {
             this.showNewCustomerModal = false;
         },
     },
-});
+};

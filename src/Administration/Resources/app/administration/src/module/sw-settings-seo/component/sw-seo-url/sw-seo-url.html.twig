@@ -1,3 +1,4 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_seo_url %}
 <div class="sw-seo-url">
     <sw-card
@@ -6,23 +7,14 @@
         :title="$tc('sw-seo-url.titleCard')"
         :is-loading="isLoading"
     >
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_seo_url_card %}
         <template v-if="showEmptySeoUrlError">
             {{ $tc('sw-seo-url.textEmptySeoUrls') }}
         </template>
 
         <template v-else>
-            {% block sw_seo_url_card_toolbar %}
-            <template slot="toolbar">
-                <sw-sales-channel-switch
-                    ref="salesChannelSwitch"
-                    :disabled="disabled"
-                    :label="$tc('sw-seo-url.labelSalesChannelSelect')"
-                    @change-sales-channel-id="onSalesChannelChanged"
-                />
-            </template>
-            {% endblock %}
-
+            <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
             {% block sw_seo_url_card_seo_path %}
             <sw-inherit-wrapper
                 v-model="currentSeoUrl.seoPathInfo"
@@ -31,6 +23,7 @@
             >
 
                 <template #content="props">
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                     {% block sw_seo_url_card_seo_path_edit %}
                     <sw-text-field
                         :map-inheritance="props"
@@ -48,6 +41,21 @@
             {% endblock %}
         </template>
 
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block sw_seo_url_card_toolbar %}
+        <template
+            v-if="!showEmptySeoUrlError"
+            #toolbar
+        >
+            <sw-sales-channel-switch
+                ref="salesChannelSwitch"
+                :disabled="disabled"
+                :label="$tc('sw-seo-url.labelSalesChannelSelect')"
+                @change-sales-channel-id="onSalesChannelChanged"
+            />
+        </template>
+        {% endblock %}
+
         <div
             v-if="hasAdditionalSeoSlot"
             class="sw-seo-url__card-seo-additional"
@@ -56,6 +64,7 @@
                 name="seo-additional"
                 v-bind="{currentSalesChannelId}"
             >
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_seo_url_additional %}{% endblock %}
             </slot>
         </div>

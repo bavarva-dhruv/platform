@@ -7,15 +7,20 @@ use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\LastNameRule;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class LastNameRuleTest extends TestCase
 {
     public function testExactMatch(): void
     {
         $rule = (new LastNameRule())->assign(['lastName' => 'shopware']);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $customer = new CustomerEntity();
         $customer->setLastName('shopware');
@@ -35,7 +40,7 @@ class LastNameRuleTest extends TestCase
     {
         $rule = (new LastNameRule())->assign(['lastName' => 'shopware']);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $customer = new CustomerEntity();
         $customer->setLastName('ShopWare');
@@ -55,7 +60,7 @@ class LastNameRuleTest extends TestCase
     {
         $rule = new LastNameRule();
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 

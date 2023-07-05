@@ -18,12 +18,12 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\HttpFoundation\Request;
 
+/**
+ * @internal
+ */
 class ProductListingTypeDataResolverTest extends TestCase
 {
-    /**
-     * @var ProductListingCmsElementResolver
-     */
-    private $listingResolver;
+    private ProductListingCmsElementResolver $listingResolver;
 
     protected function setUp(): void
     {

@@ -2,13 +2,13 @@
 
 namespace Shopware\Storefront\Theme\StorefrontPluginConfiguration;
 
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\Struct;
 
+#[Package('storefront')]
 class StorefrontPluginConfiguration extends Struct
 {
     protected ?array $themeConfig = [];
-
-    protected string $technicalName;
 
     protected ?string $name = null;
 
@@ -29,7 +29,7 @@ class StorefrontPluginConfiguration extends Struct
     protected array $assetPaths = [];
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     protected array $viewInheritance = [];
 
@@ -39,13 +39,15 @@ class StorefrontPluginConfiguration extends Struct
     protected array $iconSets = [];
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     private array $configInheritance = [];
 
-    public function __construct(string $technicalName)
+    /**
+     * @internal
+     */
+    public function __construct(protected string $technicalName)
     {
-        $this->technicalName = $technicalName;
         $this->styleFiles = new FileCollection();
         $this->scriptFiles = new FileCollection();
     }
@@ -156,7 +158,7 @@ class StorefrontPluginConfiguration extends Struct
     }
 
     /**
-     * @return string[]
+     * @return array<string>
      */
     public function getViewInheritance(): array
     {
@@ -164,7 +166,7 @@ class StorefrontPluginConfiguration extends Struct
     }
 
     /**
-     * @param string[] $viewInheritance
+     * @param array<string> $viewInheritance
      */
     public function setViewInheritance(array $viewInheritance): void
     {

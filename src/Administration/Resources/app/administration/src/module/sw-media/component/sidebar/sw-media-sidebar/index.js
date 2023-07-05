@@ -1,9 +1,13 @@
 import template from './sw-media-sidebar.html.twig';
 import './sw-media-sidebar.scss';
 
-const { Component, Filter, Context } = Shopware;
+const { Filter, Context } = Shopware;
 
-Component.register('sw-media-sidebar', {
+/**
+ * @package content
+ */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
     inject: ['repositoryFactory'],
     props: {
@@ -116,4 +120,4 @@ Component.register('sw-media-sidebar', {
             this.$emit('media-sidebar-folder-renamed');
         },
     },
-});
+};

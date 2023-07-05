@@ -18,15 +18,19 @@ use Shopware\Core\Checkout\Payment\Exception\CapturePreparedPaymentException;
 use Shopware\Core\Checkout\Payment\Exception\InvalidOrderException;
 use Shopware\Core\Checkout\Payment\Exception\UnknownPaymentMethodException;
 use Shopware\Core\Checkout\Payment\Exception\ValidatePreparedPaymentException;
+use Shopware\Core\Checkout\Payment\PaymentException;
 use Shopware\Core\Checkout\Payment\PaymentMethodDefinition;
 use Shopware\Core\Checkout\Payment\PreparedPaymentService;
 use Shopware\Core\Checkout\Test\Cart\Common\Generator;
 use Shopware\Core\Checkout\Test\Payment\Handler\V630\PreparedTestPaymentHandler;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Pricing\CashRoundingConfig;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
+use Shopware\Core\Framework\Feature;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\Framework\Test\TestCaseBase\BasicTestDataBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
@@ -35,32 +39,32 @@ use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextService;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
-use Shopware\Core\System\StateMachine\StateMachineRegistry;
+use Shopware\Core\System\StateMachine\Loader\InitialStateIdLoader;
 use Shopware\Core\Test\TestDefaults;
 
 /**
+ * @internal
  * This test handles transactions itself, because it shuts down the kernel in the setUp method.
  */
+#[Package('checkout')]
 class PreparedPaymentServiceTest extends TestCase
 {
-    use KernelTestBehaviour;
     use BasicTestDataBehaviour;
+    use KernelTestBehaviour;
 
     private PreparedPaymentService $paymentService;
 
-    private EntityRepositoryInterface $orderRepository;
+    private EntityRepository $orderRepository;
 
-    private EntityRepositoryInterface $customerRepository;
+    private EntityRepository $customerRepository;
 
-    private EntityRepositoryInterface $orderTransactionRepository;
+    private EntityRepository $orderTransactionRepository;
 
-    private EntityRepositoryInterface $paymentMethodRepository;
+    private EntityRepository $paymentMethodRepository;
 
     private Context $context;
 
     private OrderTransactionStateHandler $orderTransactionStateHandler;
-
-    private StateMachineRegistry $stateMachineRegistry;
 
     protected function setUp(): void
     {
@@ -72,7 +76,6 @@ class PreparedPaymentServiceTest extends TestCase
 
         $this->paymentService = $this->getContainer()->get(PreparedPaymentService::class);
         $this->orderTransactionStateHandler = $this->getContainer()->get(OrderTransactionStateHandler::class);
-        $this->stateMachineRegistry = $this->getContainer()->get(StateMachineRegistry::class);
         $this->orderRepository = $this->getRepository(OrderDefinition::ENTITY_NAME);
         $this->customerRepository = $this->getRepository(CustomerDefinition::ENTITY_NAME);
         $this->orderTransactionRepository = $this->getRepository(OrderTransactionDefinition::ENTITY_NAME);
@@ -111,7 +114,11 @@ class PreparedPaymentServiceTest extends TestCase
         $salesChannelContext = $this->getSalesChannelContext($paymentMethodId);
         PreparedTestPaymentHandler::$fail = true;
 
-        $this->expectException(ValidatePreparedPaymentException::class);
+        if (!Feature::isActive('v6.6.0.0')) {
+            $this->expectException(ValidatePreparedPaymentException::class);
+        }
+        $this->expectException(PaymentException::class);
+        $this->expectExceptionMessage('The validation process of the prepared payment was interrupted due to the following error:' . \PHP_EOL . 'this is supposed to fail');
         $this->paymentService->handlePreOrderPayment($cart, new RequestDataBag(), $salesChannelContext);
     }
 
@@ -121,7 +128,10 @@ class PreparedPaymentServiceTest extends TestCase
         $cart = Generator::createCart();
         $salesChannelContext = $this->getSalesChannelContext($paymentMethodId);
 
-        $this->expectException(UnknownPaymentMethodException::class);
+        if (!Feature::isActive('v6.6.0.0')) {
+            $this->expectException(UnknownPaymentMethodException::class);
+        }
+        $this->expectException(PaymentException::class);
         $this->expectExceptionMessage(\sprintf('The payment method %s could not be found.', $paymentMethodId));
         $this->paymentService->handlePreOrderPayment($cart, new RequestDataBag(), $salesChannelContext);
     }
@@ -165,7 +175,13 @@ class PreparedPaymentServiceTest extends TestCase
         $struct = new ArrayStruct(['testStruct']);
         PreparedTestPaymentHandler::$fail = true;
 
-        $this->expectException(CapturePreparedPaymentException::class);
+        $this->expectException(PaymentException::class);
+        $this->expectExceptionMessage('The capture process of the prepared payment was interrupted due to the following error:' . \PHP_EOL . 'this is supposed to fail');
+
+        if (!Feature::isActive('v6.6.0.0')) {
+            $this->expectException(CapturePreparedPaymentException::class);
+        }
+
         $this->paymentService->handlePostOrderPayment($order, new RequestDataBag(), $salesChannelContext, $struct);
     }
 
@@ -179,7 +195,10 @@ class PreparedPaymentServiceTest extends TestCase
         $order = $this->loadOrder($orderId, $salesChannelContext);
         $struct = new ArrayStruct(['testStruct']);
 
-        $this->expectException(UnknownPaymentMethodException::class);
+        if (!Feature::isActive('v6.6.0.0')) {
+            $this->expectException(UnknownPaymentMethodException::class);
+        }
+        $this->expectException(PaymentException::class);
         $this->expectExceptionMessage(\sprintf('The payment method %s could not be found.', $paymentMethodId));
         $this->paymentService->handlePostOrderPayment($order, new RequestDataBag(), $salesChannelContext, $struct);
     }
@@ -206,7 +225,11 @@ class PreparedPaymentServiceTest extends TestCase
         $order = $this->loadOrder($orderId, $salesChannelContext, false);
         $struct = new ArrayStruct(['testStruct']);
 
-        $this->expectException(InvalidOrderException::class);
+        if (!Feature::isActive('v6.6.0.0')) {
+            $this->expectException(InvalidOrderException::class);
+        }
+        $this->expectException(PaymentException::class);
+
         $this->paymentService->handlePostOrderPayment($order, new RequestDataBag(), $salesChannelContext, $struct);
     }
 
@@ -243,7 +266,7 @@ class PreparedPaymentServiceTest extends TestCase
             'id' => $id,
             'orderId' => $orderId,
             'paymentMethodId' => $paymentMethodId,
-            'stateId' => $this->stateMachineRegistry->getInitialState(OrderTransactionStates::STATE_MACHINE, $context)->getId(),
+            'stateId' => $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderTransactionStates::STATE_MACHINE),
             'amount' => new CalculatedPrice(100, 100, new CalculatedTaxCollection(), new TaxRuleCollection(), 1),
             'payload' => '{}',
         ];
@@ -263,6 +286,8 @@ class PreparedPaymentServiceTest extends TestCase
 
         $order = [
             'id' => $orderId,
+            'itemRounding' => json_decode(json_encode(new CashRoundingConfig(2, 0.01, true), \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
+            'totalRounding' => json_decode(json_encode(new CashRoundingConfig(2, 0.01, true), \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
             'orderNumber' => Uuid::randomHex(),
             'orderDateTime' => (new \DateTimeImmutable())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             'price' => new CartPrice(10, 10, 10, new CalculatedTaxCollection(), new TaxRuleCollection(), CartPrice::TAX_STATE_NET),
@@ -274,7 +299,7 @@ class PreparedPaymentServiceTest extends TestCase
                 'firstName' => 'Max',
                 'lastName' => 'Mustermann',
             ],
-            'stateId' => $this->stateMachineRegistry->getInitialState(OrderTransactionStates::STATE_MACHINE, $context)->getId(),
+            'stateId' => $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderTransactionStates::STATE_MACHINE),
             'paymentMethodId' => $paymentMethodId,
             'currencyId' => Defaults::CURRENCY,
             'currencyFactor' => 1.0,
@@ -359,10 +384,10 @@ class PreparedPaymentServiceTest extends TestCase
         return $id;
     }
 
-    private function getRepository(string $entityName): EntityRepositoryInterface
+    private function getRepository(string $entityName): EntityRepository
     {
         $repository = $this->getContainer()->get(\sprintf('%s.repository', $entityName));
-        static::assertInstanceOf(EntityRepositoryInterface::class, $repository);
+        static::assertInstanceOf(EntityRepository::class, $repository);
 
         return $repository;
     }

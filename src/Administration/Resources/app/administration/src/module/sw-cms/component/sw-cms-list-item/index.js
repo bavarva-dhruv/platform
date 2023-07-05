@@ -1,10 +1,16 @@
 import template from './sw-cms-list-item.html.twig';
 import './sw-cms-list-item.scss';
 
-const { Component, Filter } = Shopware;
+const { Filter } = Shopware;
 
-Component.register('sw-cms-list-item', {
+/**
+ * @package content
+ */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
+
+    inject: ['feature'],
 
     props: {
         page: {
@@ -19,6 +25,12 @@ Component.register('sw-cms-list-item', {
             default: false,
         },
 
+        isDefault: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
+
         disabled: {
             type: Boolean,
             required: false,
@@ -28,7 +40,7 @@ Component.register('sw-cms-list-item', {
 
     computed: {
         previewMedia() {
-            if (this.page.previewMedia && this.page.previewMedia.id && this.page.previewMedia.url) {
+            if (this.page.previewMedia?.id && this.page.previewMedia?.url) {
                 return {
                     'background-image': `url(${this.page.previewMedia.url})`,
                     'background-size': 'cover',
@@ -41,9 +53,10 @@ Component.register('sw-cms-list-item', {
                 };
             }
 
-            if (this.defaultItemLayoutAssetBackground) {
+            const backgroundImage = this.defaultItemLayoutAssetBackground;
+            if (backgroundImage) {
                 return {
-                    'background-image': this.defaultItemLayoutAssetBackground,
+                    'background-image': backgroundImage,
                     'background-size': 'cover',
                 };
             }
@@ -74,7 +87,7 @@ Component.register('sw-cms-list-item', {
 
         statusClasses() {
             return {
-                'is--active': this.active,
+                'is--active': this.active || this.isDefault,
             };
         },
 
@@ -84,11 +97,6 @@ Component.register('sw-cms-list-item', {
     },
 
     methods: {
-        /* @deprecated tag:v6.5.0 isActive is superfluous since the component now relies on the "active" prop only */
-        isActive() {
-            return this.active;
-        },
-
         onChangePreviewImage(page) {
             this.$emit('preview-image-change', page);
         },
@@ -119,4 +127,4 @@ Component.register('sw-cms-list-item', {
             this.$emit('cms-page-delete', page);
         },
     },
-});
+};

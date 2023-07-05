@@ -1,5 +1,7 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_bulk_edit_product_visibility %}
 <div class="sw-bulk-edit-product-visibility">
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_bulk_edit_product_visibility_select %}
     <sw-inherit-wrapper
         ref="productVisibilitiesInheritance"
@@ -16,12 +18,14 @@
                 class="sw-product-detail__select-visibility"
                 :entity-collection="currentValue"
                 :placeholder="$tc('sw-product.visibility.placeholderVisibility')"
+                :disabled="disabled"
                 @change="updateCurrentValue"
             />
         </template>
     </sw-inherit-wrapper>
     {% endblock %}
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_bulk_edit_product_visibility_advanced %}
     <sw-container
         v-if="product.visibilities.length > 0"
@@ -31,16 +35,18 @@
         <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events -->
         <a
             class="sw-card__quick-link advanced-visibility"
+            :class="{ 'is--disabled': disabled }"
             @click="openModal"
         >
             {{ $tc('sw-product.visibility.linkAdvancedVisibility') }} <sw-icon
-                name="default-arrow-simple-right"
+                name="regular-long-arrow-right"
                 small
             />
         </a>
     </sw-container>
     {% endblock %}
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_bulk_edit_product_visibility_advanced_modal %}
     <sw-modal
         v-if="displayVisibilityDetail"
@@ -52,7 +58,7 @@
 
         <sw-product-visibility-detail />
 
-        <template slot="modal-footer">
+        <template #modal-footer>
             <sw-button
                 variant="primary"
                 size="small"

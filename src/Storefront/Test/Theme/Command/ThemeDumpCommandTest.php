@@ -16,11 +16,14 @@ use Shopware\Storefront\Theme\StorefrontPluginRegistry;
 use Shopware\Storefront\Theme\ThemeFileResolver;
 use Symfony\Component\Console\Tester\CommandTester;
 
+/**
+ * @internal
+ */
 class ThemeDumpCommandTest extends TestCase
 {
     use SalesChannelFunctionalTestBehaviour;
 
-    private $themeId;
+    private string $themeId;
 
     public function testExecuteShouldResolveThemeInheritanceChainAndConsiderThemeIdArgument(): void
     {
@@ -44,7 +47,7 @@ class ThemeDumpCommandTest extends TestCase
         static::assertSame('expectedConfig', $themeFileResolverMock->themeConfig->getThemeConfig()[0]);
     }
 
-    private function getPluginRegistryMock(): MockObject
+    private function getPluginRegistryMock(): MockObject&StorefrontPluginRegistry
     {
         $storePluginConfiguration1 = new StorefrontPluginConfiguration('parentTheme');
         $storePluginConfiguration1->setThemeConfig([
@@ -124,9 +127,12 @@ class ThemeDumpCommandTest extends TestCase
     }
 }
 
+/**
+ * @internal
+ */
 class ThemeFileResolverMock extends ThemeFileResolver
 {
-    public $themeConfig;
+    public StorefrontPluginConfiguration $themeConfig;
 
     public function __construct()
     {

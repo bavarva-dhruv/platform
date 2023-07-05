@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\Script\Debugging;
 
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Script\Execution\FunctionHook;
 use Shopware\Core\Framework\Script\Execution\Hook;
 use Shopware\Core\Framework\Script\Execution\Script;
@@ -9,25 +10,32 @@ use Symfony\Bundle\FrameworkBundle\DataCollector\AbstractDataCollector;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\VarDumper\Cloner\Data;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
- * @deprecated tag:v6.5.0 will be internal
+ * @internal
  */
-class ScriptTraces extends AbstractDataCollector
+#[Package('core')]
+class ScriptTraces extends AbstractDataCollector implements ResetInterface
 {
+    /**
+     * @var array<string, mixed>
+     */
     protected array $traces = [];
+
+    /**
+     * @var list<string>
+     */
+    protected static array $deprecationNotices = [];
+
+    public static function addDeprecationNotice(string $deprecationNotice): void
+    {
+        static::$deprecationNotices[] = $deprecationNotice;
+    }
 
     public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
         $this->data = $this->traces;
-    }
-
-    /**
-     * @deprecated tag:v6.5.0 will be removed, use `initHook` instead
-     */
-    public function init(string $hook): void
-    {
-        // dummy implementation to not break
     }
 
     public function initHook(Hook $hook): void
@@ -48,14 +56,17 @@ class ScriptTraces extends AbstractDataCollector
 
         $debug = new Debug();
 
+        static::$deprecationNotices = [];
         $execute($debug);
+        $deprecations = static::$deprecationNotices;
+        static::$deprecationNotices = [];
 
         $took = round(microtime(true) - $time, 3);
 
-        $name = explode('/', $script->getName());
+        $name = explode('/', (string) $script->getName());
         $name = array_pop($name);
 
-        $this->add($hook, $name, $took, $debug);
+        $this->add($hook, $name, $took, $debug, $deprecations);
     }
 
     public function getHookCount(): int
@@ -67,6 +78,9 @@ class ScriptTraces extends AbstractDataCollector
         return \count($this->data);
     }
 
+    /**
+     * @return list<string>
+     */
     public function getHooks(): array
     {
         if ($this->data instanceof Data) {
@@ -76,6 +90,9 @@ class ScriptTraces extends AbstractDataCollector
         return array_keys($this->data);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getScripts(string $hook): array
     {
         return $this->data[$hook] ?? [];
@@ -97,7 +114,21 @@ class ScriptTraces extends AbstractDataCollector
     {
         $count = 0;
         foreach ($this->data as $scripts) {
-            $count += \count($scripts);
+            $count += is_countable($scripts) ? \count($scripts) : 0;
+        }
+
+        return $count;
+    }
+
+    public function getDeprecationCount(): int
+    {
+        $count = 0;
+        foreach ($this->data as $scripts) {
+            foreach ($scripts as $script) {
+                foreach ($script['deprecations'] as $deprecationCount) {
+                    $count += $deprecationCount;
+                }
+            }
         }
 
         return $count;
@@ -105,28 +136,54 @@ class ScriptTraces extends AbstractDataCollector
 
     public static function getTemplate(): ?string
     {
-        return 'storefront/profiling/script_traces.html.twig';
+        return '@Profiling/Collector/script_traces.html.twig';
     }
 
     /**
-     * @return array|Data
+     * @return array<string, mixed>|Data
      */
-    public function getData()
+    public function getData(): array|Data
     {
         return $this->data;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getTraces(): array
     {
         return $this->traces;
     }
 
-    private function add(Hook $hook, string $name, float $took, Debug $output): void
+    /**
+     * @internal
+     *
+     * @return array<string, mixed>
+     */
+    public function getOutput(string $name, int $index): array
     {
+        return $this->traces[$name][$index]['output'];
+    }
+
+    public function reset(): void
+    {
+        parent::reset();
+        $this->traces = [];
+    }
+
+    /**
+     * @param list<string> $deprecations
+     */
+    private function add(Hook $hook, string $name, float $took, Debug $output, array $deprecations): void
+    {
+        $deprecations = array_count_values($deprecations);
+        arsort($deprecations);
+
         $this->traces[$this->getHookName($hook)][] = [
             'name' => $name,
             'took' => $took,
             'output' => $output->all(),
+            'deprecations' => $deprecations,
         ];
     }
 

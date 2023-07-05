@@ -12,15 +12,21 @@ use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Checkout\Test\Payment\Handler\V630\AsyncTestPaymentHandler as AsyncTestPaymentHandlerV630;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Pricing\CashRoundingConfig;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\SalesChannelApiTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\Framework\Uuid\Uuid;
-use Shopware\Core\System\StateMachine\StateMachineRegistry;
+use Shopware\Core\System\StateMachine\Loader\InitialStateIdLoader;
 use Shopware\Core\Test\TestDefaults;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class HandlePaymentMethodRouteResponseTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -28,21 +34,19 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
 
     private KernelBrowser $browser;
 
-    private EntityRepositoryInterface $orderRepository;
+    private EntityRepository $orderRepository;
 
-    private EntityRepositoryInterface $customerRepository;
+    private EntityRepository $customerRepository;
 
-    private EntityRepositoryInterface $orderTransactionRepository;
+    private EntityRepository $orderTransactionRepository;
 
-    private EntityRepositoryInterface $paymentMethodRepository;
-
-    private StateMachineRegistry $stateMachineRegistry;
+    private EntityRepository $paymentMethodRepository;
 
     private TestDataCollection $ids;
 
     protected function setUp(): void
     {
-        $this->ids = new TestDataCollection(Context::createDefaultContext());
+        $this->ids = new TestDataCollection();
 
         $this->browser = $this->createCustomSalesChannelBrowser([
             'id' => $this->ids->create('sales-channel'),
@@ -52,7 +56,6 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
         $this->customerRepository = $this->getContainer()->get('customer.repository');
         $this->orderTransactionRepository = $this->getContainer()->get('order_transaction.repository');
         $this->paymentMethodRepository = $this->getContainer()->get('payment_method.repository');
-        $this->stateMachineRegistry = $this->getContainer()->get(StateMachineRegistry::class);
     }
 
     public function testRequestNotLoggedIn(): void
@@ -66,7 +69,7 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
             );
 
         static::assertIsString($this->browser->getResponse()->getContent());
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode($this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertArrayHasKey('errors', $response);
         static::assertSame('VIOLATION::IS_BLANK_ERROR', $response['errors'][0]['code']);
@@ -84,7 +87,7 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
             );
 
         static::assertIsString($this->browser->getResponse()->getContent());
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode($this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertArrayHasKey('errors', $response);
         static::assertSame('CHECKOUT__INVALID_ORDER_ID', $response['errors'][0]['code']);
@@ -92,10 +95,10 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
 
     public function testPayOrder(): void
     {
-        $paymentMethodId = $this->createPaymentMethodV630($this->ids->getContext());
-        $customerId = $this->createCustomer($this->ids->getContext());
-        $orderId = $this->createOrder($customerId, $paymentMethodId, $this->ids->getContext());
-        $this->createTransaction($orderId, $paymentMethodId, $this->ids->getContext());
+        $paymentMethodId = $this->createPaymentMethodV630(Context::createDefaultContext());
+        $customerId = $this->createCustomer();
+        $orderId = $this->createOrder($customerId, $paymentMethodId, Context::createDefaultContext());
+        $this->createTransaction($orderId, $paymentMethodId, Context::createDefaultContext());
 
         $this->browser
             ->request(
@@ -107,7 +110,7 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
             );
 
         static::assertIsString($this->browser->getResponse()->getContent());
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode($this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
         static::assertArrayHasKey('redirectUrl', $response);
         static::assertSame(AsyncTestPaymentHandlerV630::REDIRECT_URL, $response['redirectUrl']);
     }
@@ -122,7 +125,7 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
             'id' => $id,
             'orderId' => $orderId,
             'paymentMethodId' => $paymentMethodId,
-            'stateId' => $this->stateMachineRegistry->getInitialState(OrderTransactionStates::STATE_MACHINE, $context)->getId(),
+            'stateId' => $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderTransactionStates::STATE_MACHINE),
             'amount' => new CalculatedPrice(100, 100, new CalculatedTaxCollection(), new TaxRuleCollection(), 1),
             'payload' => '{}',
         ];
@@ -139,11 +142,13 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
     ): string {
         $orderId = Uuid::randomHex();
         $addressId = Uuid::randomHex();
-        $stateId = $this->stateMachineRegistry->getInitialState(OrderStates::STATE_MACHINE, $context)->getId();
+        $stateId = $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderStates::STATE_MACHINE);
 
         $order = [
             'id' => $orderId,
             'orderNumber' => Uuid::randomHex(),
+            'itemRounding' => json_decode(json_encode(new CashRoundingConfig(2, 0.01, true), \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
+            'totalRounding' => json_decode(json_encode(new CashRoundingConfig(2, 0.01, true), \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
             'orderDateTime' => (new \DateTimeImmutable())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             'price' => new CartPrice(10, 10, 10, new CalculatedTaxCollection(), new TaxRuleCollection(), CartPrice::TAX_STATE_NET),
             'shippingCosts' => new CalculatedPrice(10, 10, new CalculatedTaxCollection(), new TaxRuleCollection()),
@@ -181,44 +186,6 @@ class HandlePaymentMethodRouteResponseTest extends TestCase
         $this->orderRepository->upsert([$order], $context);
 
         return $orderId;
-    }
-
-    private function createCustomer(Context $context): string
-    {
-        $customerId = Uuid::randomHex();
-        $addressId = Uuid::randomHex();
-
-        $customer = [
-            'id' => $customerId,
-            'customerNumber' => '1337',
-            'salutationId' => $this->getValidSalutationId(),
-            'firstName' => 'Max',
-            'lastName' => 'Mustermann',
-            'email' => Uuid::randomHex() . '@example.com',
-            'password' => 'shopware',
-            'defaultPaymentMethodId' => $this->getValidPaymentMethodId(),
-            'groupId' => TestDefaults::FALLBACK_CUSTOMER_GROUP,
-            'salesChannelId' => TestDefaults::SALES_CHANNEL,
-            'defaultBillingAddressId' => $addressId,
-            'defaultShippingAddressId' => $addressId,
-            'addresses' => [
-                [
-                    'id' => $addressId,
-                    'customerId' => $customerId,
-                    'countryId' => $this->getValidCountryId(),
-                    'salutationId' => $this->getValidSalutationId(),
-                    'firstName' => 'Max',
-                    'lastName' => 'Mustermann',
-                    'street' => 'Ebbinghoff 10',
-                    'zipcode' => '48624',
-                    'city' => 'Schöppingen',
-                ],
-            ],
-        ];
-
-        $this->customerRepository->upsert([$customer], $context);
-
-        return $customerId;
     }
 
     private function createPaymentMethodV630(

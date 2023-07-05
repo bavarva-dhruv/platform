@@ -3,54 +3,43 @@
 namespace Shopware\Core\Checkout\Test\Cart\Promotion\Integration\Calculation;
 
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\Checkout\Cart\Cart;
+use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Promotion\Aggregate\PromotionDiscount\PromotionDiscountEntity;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionIntegrationTestBehaviour;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionTestFixtureBehaviour;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Util\Random;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextService;
-use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class PromotionAbsoluteCalculationTest extends TestCase
 {
     use IntegrationTestBehaviour;
-    use PromotionTestFixtureBehaviour;
     use PromotionIntegrationTestBehaviour;
+    use PromotionTestFixtureBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $productRepository;
+    protected EntityRepository $productRepository;
 
-    /**
-     * @var CartService
-     */
-    protected $cartService;
+    protected CartService $cartService;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $promotionRepository;
-
-    /**
-     * @var SalesChannelContext
-     */
-    private $context;
+    protected EntityRepository $promotionRepository;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->context = $this->getContainer()->get(SalesChannelContextFactory::class)->create(Uuid::randomHex(), TestDefaults::SALES_CHANNEL);
-
         $this->productRepository = $this->getContainer()->get('product.repository');
         $this->promotionRepository = $this->getContainer()->get('promotion.repository');
         $this->cartService = $this->getContainer()->get(CartService::class);
@@ -61,13 +50,9 @@ class PromotionAbsoluteCalculationTest extends TestCase
      * We add a product and also an absolute promotion.
      * Our final price should then be as expected.
      *
-     * @test
      * @group promotions
      *
-     * @throws \Shopware\Core\Checkout\Cart\Exception\InvalidPayloadException
-     * @throws \Shopware\Core\Checkout\Cart\Exception\InvalidQuantityException
-     * @throws \Shopware\Core\Checkout\Cart\Exception\LineItemNotStackableException
-     * @throws \Shopware\Core\Checkout\Cart\Exception\MixedLineItemTypeException
+     * @throws CartException
      */
     public function testAbsoluteDiscount(): void
     {
@@ -102,7 +87,6 @@ class PromotionAbsoluteCalculationTest extends TestCase
      * The standard value of discount would be 15, but our currency price value is 30
      * Our cart should have a total value of 70,00 (and not 85 as standard) in the end.
      *
-     * @test
      * @group promotions
      */
     public function testAbsoluteDiscountWithCurrencyPriceValues(): void

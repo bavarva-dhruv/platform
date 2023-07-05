@@ -8,9 +8,10 @@ use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEnt
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\BillingCountryRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
@@ -21,25 +22,20 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class BillingCountryRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $conditionRepository;
+    private EntityRepository $conditionRepository;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
     private BillingCountryRule $rule;
 
@@ -189,20 +185,54 @@ class BillingCountryRuleTest extends TestCase
         static::assertEquals(new ArrayOfUuid(), $countryIds[1]);
     }
 
+    public function testRuleNotMatchingWithoutCountry(): void
+    {
+        $this->rule->assign(['countryIds' => ['foo'], 'operator' => Rule::OPERATOR_EQ]);
+        $salesChannelContext = $this->createMock(SalesChannelContext::class);
+
+        static::assertFalse($this->rule->match(new CheckoutRuleScope($salesChannelContext)));
+
+        $customer = new CustomerEntity();
+        $salesChannelContext->method('getCustomer')->willReturn($customer);
+
+        static::assertFalse($this->rule->match(new CheckoutRuleScope($salesChannelContext)));
+
+        $customerAddress = new CustomerAddressEntity();
+        $customer->setActiveBillingAddress($customerAddress);
+        $salesChannelContext->method('getCustomer')->willReturn($customer);
+
+        static::assertFalse($this->rule->match(new CheckoutRuleScope($salesChannelContext)));
+    }
+
     /**
      * @dataProvider getMatchValues
      */
-    public function testRuleMatching(string $operator, bool $isMatching, string $countryId): void
+    public function testRuleMatching(string $operator, bool $isMatching, string $countryId, bool $noCustomer = false, bool $noCountry = false, bool $noAddress = false): void
     {
         $countryIds = ['kyln123', 'kyln456'];
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $customerAddress = $this->createMock(CustomerAddressEntity::class);
+        $customerAddress = new CustomerAddressEntity();
+
         $country = new CountryEntity();
-        $country->setId($countryId);
-        $customerAddress->method('getCountry')->willReturn($country);
         $customer = new CustomerEntity();
 
-        $customer->setActiveBillingAddress($customerAddress);
+        $country->setId($countryId);
+        if ($noCountry) {
+            $country = null;
+        }
+
+        if (!$noAddress) {
+            if ($country) {
+                $customerAddress->setCountry($country);
+            }
+
+            $customer->setActiveBillingAddress($customerAddress);
+        }
+
+        if ($noCustomer) {
+            $customer = null;
+        }
+
         $salesChannelContext->method('getCustomer')->willReturn($customer);
         $scope = new CheckoutRuleScope($salesChannelContext);
         $this->rule->assign(['countryIds' => $countryIds, 'operator' => $operator]);
@@ -215,15 +245,28 @@ class BillingCountryRuleTest extends TestCase
         }
     }
 
-    public function getMatchValues(): array
+    /**
+     * @return \Traversable<string, array<string|bool>>
+     */
+    public static function getMatchValues(): \Traversable
     {
-        return [
-            'operator_oq / not match / country id' => [Rule::OPERATOR_EQ, false, Uuid::randomHex()],
-            'operator_oq / match / country id' => [Rule::OPERATOR_EQ, true, 'kyln123'],
-            'operator_neq / match / country id' => [Rule::OPERATOR_NEQ, true,  Uuid::randomHex()],
-            'operator_neq / not match / country id' => [Rule::OPERATOR_NEQ, false, 'kyln123'],
-            'operator_empty / not match / country id' => [Rule::OPERATOR_NEQ, false, 'kyln123'],
-            'operator_empty / match / country id' => [Rule::OPERATOR_EMPTY, true, ''],
-        ];
+        yield 'operator_eq / not match / country id' => [Rule::OPERATOR_EQ, false, Uuid::randomHex()];
+        yield 'operator_eq / match / country id' => [Rule::OPERATOR_EQ, true, 'kyln123'];
+        yield 'operator_neq / match / country id' => [Rule::OPERATOR_NEQ, true,  Uuid::randomHex()];
+        yield 'operator_neq / not match / country id' => [Rule::OPERATOR_NEQ, false, 'kyln123'];
+        yield 'operator_empty / not match / country id' => [Rule::OPERATOR_NEQ, false, 'kyln123'];
+        yield 'operator_empty / match / country id' => [Rule::OPERATOR_EMPTY, true, ''];
+
+        yield 'operator_eq / no match / no customer' => [Rule::OPERATOR_EQ, false, '', true];
+        yield 'operator_eq / no match / no country' => [Rule::OPERATOR_EQ, false, '', false, true];
+        yield 'operator_eq / no match / no address' => [Rule::OPERATOR_EQ, false, '', false, false, true];
+
+        yield 'operator_empty / match / no customer' => [Rule::OPERATOR_EMPTY, true, '', true];
+        yield 'operator_empty / match / no country' => [Rule::OPERATOR_EMPTY, true, '', false, true];
+        yield 'operator_empty / match / no address' => [Rule::OPERATOR_EMPTY, true, '', false, false, true];
+
+        yield 'operator_neq / match / no customer' => [Rule::OPERATOR_NEQ, true, '', true];
+        yield 'operator_neq / match / no country' => [Rule::OPERATOR_NEQ, true, '', false, true];
+        yield 'operator_neq / match / no address' => [Rule::OPERATOR_NEQ, true, '', false, false, true];
     }
 }

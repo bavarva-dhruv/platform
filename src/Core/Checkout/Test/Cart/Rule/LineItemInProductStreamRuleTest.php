@@ -9,6 +9,7 @@ use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Cart\Rule\LineItemInProductStreamRule;
 use Shopware\Core\Checkout\Cart\Rule\LineItemScope;
 use Shopware\Core\Checkout\Test\Cart\Rule\Helper\CartRuleHelperTrait;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Exception\UnsupportedOperatorException;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Validation\Constraint\ArrayOfUuid;
@@ -17,8 +18,11 @@ use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
+ * @internal
+ *
  * @group rules
  */
+#[Package('business-ops')]
 class LineItemInProductStreamRuleTest extends TestCase
 {
     use CartRuleHelperTrait;
@@ -45,6 +49,9 @@ class LineItemInProductStreamRuleTest extends TestCase
 
     /**
      * @dataProvider getLineItemScopeTestData
+     *
+     * @param array<string> $streamIds
+     * @param array<string> $lineItemProductStreamIds
      */
     public function testIfMatchesCorrectWithLineItemScope(
         array $streamIds,
@@ -65,7 +72,10 @@ class LineItemInProductStreamRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getLineItemScopeTestData(): array
+    /**
+     * @return array<string, array<array<string>|string|bool>>
+     */
+    public static function getLineItemScopeTestData(): array
     {
         return [
             'single product / equal / match stream id' => [['1', '2'], Rule::OPERATOR_EQ, ['1'], true],
@@ -78,6 +88,9 @@ class LineItemInProductStreamRuleTest extends TestCase
 
     /**
      * @dataProvider getCartRuleScopeTestData
+     *
+     * @param array<string> $streamIds
+     * @param array<string> $lineItemCategoryIds
      */
     public function testIfMatchesCorrectWithCartRuleScope(
         array $streamIds,
@@ -107,6 +120,9 @@ class LineItemInProductStreamRuleTest extends TestCase
 
     /**
      * @dataProvider getCartRuleScopeTestData
+     *
+     * @param array<string> $streamIds
+     * @param array<string> $lineItemCategoryIds
      */
     public function testIfMatchesCorrectWithCartRuleScopeNested(
         array $streamIds,
@@ -123,7 +139,7 @@ class LineItemInProductStreamRuleTest extends TestCase
             $this->createLineItemWithProductStreams(['1']),
             $this->createLineItemWithProductStreams($lineItemCategoryIds),
         ]);
-        $containerLineItem = ($this->createContainerLineItem($lineItemCollection))->setPayloadValue('streamIds', ['1']);
+        $containerLineItem = $this->createContainerLineItem($lineItemCollection)->setPayloadValue('streamIds', ['1']);
         $cart = $this->createCart(new LineItemCollection([$containerLineItem]));
 
         $match = $this->rule->match(new CartRuleScope(
@@ -134,7 +150,10 @@ class LineItemInProductStreamRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getCartRuleScopeTestData(): array
+    /**
+     * @return array<string, array<array<string>|string|bool>>
+     */
+    public static function getCartRuleScopeTestData(): array
     {
         return [
             'multiple products / equal / match stream id' => [['1', '2'], Rule::OPERATOR_EQ, ['2'], true],
@@ -183,8 +202,11 @@ class LineItemInProductStreamRuleTest extends TestCase
         static::assertEquals(new ArrayOfUuid(), $streamIds[1]);
     }
 
+    /**
+     * @param array<string> $streamIds
+     */
     private function createLineItemWithProductStreams(array $streamIds): LineItem
     {
-        return ($this->createLineItem())->setPayloadValue('streamIds', $streamIds);
+        return $this->createLineItem()->setPayloadValue('streamIds', $streamIds);
     }
 }

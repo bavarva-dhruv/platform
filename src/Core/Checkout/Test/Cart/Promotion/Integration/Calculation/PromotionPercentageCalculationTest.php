@@ -3,42 +3,36 @@
 namespace Shopware\Core\Checkout\Test\Cart\Promotion\Integration\Calculation;
 
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\Checkout\Cart\Exception\InvalidPayloadException;
-use Shopware\Core\Checkout\Cart\Exception\InvalidQuantityException;
-use Shopware\Core\Checkout\Cart\Exception\LineItemNotStackableException;
-use Shopware\Core\Checkout\Cart\Exception\MixedLineItemTypeException;
+use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
+use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionIntegrationTestBehaviour;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionTestFixtureBehaviour;
 use Shopware\Core\Defaults;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Util\Random;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class PromotionPercentageCalculationTest extends TestCase
 {
     use IntegrationTestBehaviour;
-    use PromotionTestFixtureBehaviour;
     use PromotionIntegrationTestBehaviour;
+    use PromotionTestFixtureBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $productRepository;
+    protected EntityRepository $productRepository;
 
-    /**
-     * @var CartService
-     */
-    protected $cartService;
+    protected CartService $cartService;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $promotionRepository;
+    protected EntityRepository $promotionRepository;
 
     protected function setUp(): void
     {
@@ -56,10 +50,7 @@ class PromotionPercentageCalculationTest extends TestCase
      *
      * @group promotions
      *
-     * @throws InvalidPayloadException
-     * @throws InvalidQuantityException
-     * @throws LineItemNotStackableException
-     * @throws MixedLineItemTypeException
+     * @throws CartException
      */
     public function test100PercentageDiscount(): void
     {
@@ -95,10 +86,7 @@ class PromotionPercentageCalculationTest extends TestCase
      *
      * @group promotions
      *
-     * @throws InvalidPayloadException
-     * @throws InvalidQuantityException
-     * @throws LineItemNotStackableException
-     * @throws MixedLineItemTypeException
+     * @throws CartException
      */
     public function test50PercentageDiscount(): void
     {
@@ -146,8 +134,11 @@ class PromotionPercentageCalculationTest extends TestCase
         $promotion = array_values($promotion)[1];
 
         static::assertInstanceOf(LineItem::class, $promotion);
-        static::assertEquals(-50, $promotion->getPrice()->getTotalPrice());
-        static::assertEquals(-8.33, $promotion->getPrice()->getCalculatedTaxes()->first()->getTax());
+        $price = $promotion->getPrice();
+        static::assertInstanceOf(CalculatedPrice::class, $price);
+        static::assertEquals(-50, $price->getTotalPrice());
+        static::assertNotNull($price->getCalculatedTaxes()->first());
+        static::assertEquals(-8.33, $price->getCalculatedTaxes()->first()->getTax());
     }
 
     /**
@@ -239,6 +230,7 @@ class PromotionPercentageCalculationTest extends TestCase
      * We must not get a division by zero!
      *
      * @group promotions
+     *
      * @ticket NEXT-4146
      */
     public function testPercentagePromotionDivisionByZero(): void

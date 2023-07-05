@@ -5,18 +5,23 @@ namespace Shopware\Core\Framework\Test\Adapter\Cache\Script;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Test\Product\ProductBuilder;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\Test\App\AppSystemTestBehaviour;
 use Shopware\Core\Framework\Test\IdsCollection;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
+use Shopware\Tests\Integration\Core\Framework\App\AppSystemTestBehaviour;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
+/**
+ * @internal
+ */
 class ScriptCacheInvalidationSubscriberTest extends TestCase
 {
-    use IntegrationTestBehaviour;
     use AppSystemTestBehaviour;
+    use IntegrationTestBehaviour;
 
     /**
      * @dataProvider invalidationCasesProvider
+     *
+     * @param callable(ContainerInterface): void $closure
      */
     public function testCacheInvalidation(string $tagName, callable $closure, bool $shouldBeInvalidated, IdsCollection $ids): void
     {
@@ -35,7 +40,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
         static::assertEquals(!$shouldBeInvalidated, $cache->hasItem($tagName));
     }
 
-    public function invalidationCasesProvider(): \Generator
+    public static function invalidationCasesProvider(): \Generator
     {
         $ids = new IdsCollection();
 
@@ -47,7 +52,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
                 $manufacturerRepo->upsert([[
                     'id' => $ids->get('m1'),
                     'name' => 'update',
-                ]], $ids->getContext());
+                ]], Context::createDefaultContext());
             },
             true,
             $ids,
@@ -61,7 +66,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
                 $manufacturerRepo->upsert([[
                     'id' => $ids->get('m1'),
                     'name' => 'update',
-                ]], $ids->getContext());
+                ]], Context::createDefaultContext());
             },
             true,
             $ids,
@@ -75,7 +80,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
                 $productRepo->upsert([[
                     'id' => $ids->get('p1'),
                     'name' => 'update',
-                ]], $ids->getContext());
+                ]], Context::createDefaultContext());
             },
             false,
             $ids,
@@ -93,7 +98,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
                             ->build()
                     );
 
-                $productRepo->create([$product4->build()], $ids->getContext());
+                $productRepo->create([$product4->build()], Context::createDefaultContext());
             },
             true,
             $ids,
@@ -104,7 +109,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
             function (ContainerInterface $container) use ($ids): void {
                 $productRepo = $container->get('product.repository');
 
-                $productRepo->delete([['id' => $ids->get('p2')]], $ids->getContext());
+                $productRepo->delete([['id' => $ids->get('p2')]], Context::createDefaultContext());
             },
             false,
             $ids,
@@ -118,7 +123,7 @@ class ScriptCacheInvalidationSubscriberTest extends TestCase
                 $product4 = (new ProductBuilder($ids, 'p4'))
                     ->price(100);
 
-                $productRepo->create([$product4->build()], $ids->getContext());
+                $productRepo->create([$product4->build()], Context::createDefaultContext());
             },
             false,
             $ids,

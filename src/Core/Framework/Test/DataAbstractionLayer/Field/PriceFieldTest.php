@@ -21,17 +21,20 @@ use Shopware\Core\Framework\Test\DataAbstractionLayer\Field\TestDefinition\Price
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 
+/**
+ * @internal
+ */
 class PriceFieldTest extends TestCase
 {
-    use IntegrationTestBehaviour;
     use DataAbstractionLayerFieldTestBehaviour;
+    use IntegrationTestBehaviour;
 
     /**
      * @var Connection
      */
     private $connection;
 
-    private $otherCurrencyId = '0fa91ce3e96a4bc2be4bd9ce752c3425';
+    private static string $otherCurrencyId = '0fa91ce3e96a4bc2be4bd9ce752c3425';
 
     protected function setUp(): void
     {
@@ -48,14 +51,14 @@ CREATE TABLE `_test_nullable` (
 );
 EOF;
         $this->connection->rollBack();
-        $this->connection->executeUpdate($nullableTable);
+        $this->connection->executeStatement($nullableTable);
         $this->connection->beginTransaction();
     }
 
-    public function tearDown(): void
+    protected function tearDown(): void
     {
         $this->connection->rollBack();
-        $this->connection->executeUpdate('DROP TABLE `_test_nullable`');
+        $this->connection->executeStatement('DROP TABLE `_test_nullable`');
         $this->connection->beginTransaction();
     }
 
@@ -63,7 +66,7 @@ EOF;
     {
         $context = WriteContext::createFromContext(Context::createDefaultContext());
 
-        $ids = new TestDataCollection(Context::createDefaultContext());
+        $ids = new TestDataCollection();
 
         $data = [
             [
@@ -90,7 +93,7 @@ EOF;
             ->insert($definition, $data, $context);
 
         $entity = $this->getContainer()->get(EntityReaderInterface::class)
-            ->read($definition, new Criteria([$ids->get('with-was')]), $ids->getContext())
+            ->read($definition, new Criteria([$ids->get('with-was')]), Context::createDefaultContext())
             ->get($ids->get('with-was'));
 
         $price = $entity->get('data');
@@ -110,7 +113,7 @@ EOF;
     {
         $context = WriteContext::createFromContext(Context::createDefaultContext());
 
-        $ids = new TestDataCollection(Context::createDefaultContext());
+        $ids = new TestDataCollection();
 
         $data = [
             [
@@ -157,7 +160,7 @@ EOF;
 
         $result = $this->getContainer()
             ->get(EntitySearcherInterface::class)
-            ->search($definition, $criteria, $ids->getContext());
+            ->search($definition, $criteria, Context::createDefaultContext());
 
         static::assertCount(1, $result->getIds());
         static::assertTrue($result->has($ids->get('was')));
@@ -167,7 +170,7 @@ EOF;
 
         $result = $this->getContainer()
             ->get(EntitySearcherInterface::class)
-            ->search($definition, $criteria, $ids->getContext());
+            ->search($definition, $criteria, Context::createDefaultContext());
 
         static::assertCount(0, $result->getIds());
 
@@ -176,7 +179,7 @@ EOF;
 
         $result = $this->getContainer()
             ->get(EntitySearcherInterface::class)
-            ->search($definition, $criteria, $ids->getContext());
+            ->search($definition, $criteria, Context::createDefaultContext());
 
         static::assertEquals(
             [
@@ -187,7 +190,7 @@ EOF;
         );
     }
 
-    public function cashRoundingSortingProvider()
+    public static function cashRoundingSortingProvider()
     {
         $ids = new TestDataCollection();
 
@@ -202,12 +205,12 @@ EOF;
             ],
             '0.01 interval currency fallback' => [
                 [
-                    ['id' => $ids->create('record-1'), 'data' => [self::gross(19), self::gross(8, $this->otherCurrencyId)]],
+                    ['id' => $ids->create('record-1'), 'data' => [self::gross(19), self::gross(8, self::$otherCurrencyId)]],
                     ['id' => $ids->create('record-2'), 'data' => [self::gross(6)]], // factor 1.5 => 9 €
                 ],
                 [$ids->get('record-1'), $ids->get('record-2')],
                 new CashRoundingConfig(2, 0.01, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
 
             '0.05 interval default currency' => [
@@ -218,17 +221,17 @@ EOF;
                 ],
                 [$ids->get('record-2'), $ids->get('record-1'), $ids->get('record-3')],
                 new CashRoundingConfig(2, 0.05, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
             '0.05 interval currency fallback' => [
                 [
                     ['id' => $ids->create('record-1'), 'data' => [self::gross(19.04)]],                                                // 19.05 * 1.5 = 28.575 ~ 28.60
                     ['id' => $ids->create('record-2'), 'data' => [self::gross(19.01)]],                                                // 19.01 * 1.5 = 28.515 ~ 28.50
-                    ['id' => $ids->create('record-3'), 'data' => [self::gross(19.08), self::gross(28.55, $this->otherCurrencyId)]],     // ~ 28.55
+                    ['id' => $ids->create('record-3'), 'data' => [self::gross(19.08), self::gross(28.55, self::$otherCurrencyId)]],     // ~ 28.55
                 ],
                 [$ids->get('record-2'), $ids->get('record-3'), $ids->get('record-1')],
                 new CashRoundingConfig(2, 0.05, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
         ];
     }
@@ -245,32 +248,32 @@ EOF;
         $definition = $this->registerDefinition(PriceFieldDefinition::class);
 
         $currency = [
-            'id' => $this->otherCurrencyId,
+            'id' => self::$otherCurrencyId,
             'name' => 'test',
             'factor' => 1.5,
             'symbol' => 'A',
             'shortName' => 'A',
             'isoCode' => 'A',
-            'itemRounding' => json_decode(json_encode($rounding), true),
-            'totalRounding' => json_decode(json_encode($rounding), true),
+            'itemRounding' => json_decode(json_encode($rounding, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
+            'totalRounding' => json_decode(json_encode($rounding, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
         ];
 
         $this->getContainer()
             ->get('currency.repository')
             ->upsert([$currency], Context::createDefaultContext());
 
-        $ids = new TestDataCollection(Context::createDefaultContext());
+        $ids = new TestDataCollection();
 
         $this->getContainer()
             ->get(EntityWriter::class)
-            ->insert($definition, $records, WriteContext::createFromContext($ids->getContext()));
+            ->insert($definition, $records, WriteContext::createFromContext(Context::createDefaultContext()));
 
         $criteria = new Criteria();
         $criteria->addSorting(new FieldSorting('data'));
 
         // other currency provided? switch factor to 1.5 of above currency
         $factor = 1.0;
-        if ($currencyId === $this->otherCurrencyId) {
+        if ($currencyId === self::$otherCurrencyId) {
             $factor = 1.5;
         }
 
@@ -299,7 +302,7 @@ EOF;
         static::assertEquals(array_reverse($expected), array_values($result->getIds()));
     }
 
-    public function cashRoundingFilterProvider()
+    public static function cashRoundingFilterProvider()
     {
         $ids = new TestDataCollection();
 
@@ -317,13 +320,13 @@ EOF;
             '0.01 interval currency fallback' => [
                 new RangeFilter('data', [RangeFilter::GTE => 29.91, RangeFilter::LTE => 30.08]),
                 [
-                    ['id' => $ids->create('record-1'), 'data' => [self::gross(19), self::gross(29.90, $this->otherCurrencyId)]],
+                    ['id' => $ids->create('record-1'), 'data' => [self::gross(19), self::gross(29.90, self::$otherCurrencyId)]],
                     ['id' => $ids->create('record-2'), 'data' => [self::gross(19.99)]],   // 19.99 * 1.5 = 29.985 ~ 29.99
                     ['id' => $ids->create('record-3'), 'data' => [self::gross(20.055)]],  // 20.055 * 1.5 = 30.0825 ~ 30.08
                 ],
                 [$ids->get('record-3'), $ids->get('record-2')],
                 new CashRoundingConfig(2, 0.01, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
 
             '0.05 interval default currency' => [
@@ -368,7 +371,7 @@ EOF;
                 ],
                 $ids->getList(['r-5', 'r-6', 'r-7', 'r-8', 'r-9', 'r-10', 'r-11']),
                 new CashRoundingConfig(2, 0.05, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
 
             '0.10 interval default currency' => [
@@ -395,7 +398,7 @@ EOF;
                 ],
                 $ids->getList(['r-4', 'r-5']),
                 new CashRoundingConfig(2, 0.10, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
 
             '0.50 interval default currency' => [
@@ -430,7 +433,7 @@ EOF;
                 ],
                 $ids->getList(['r-3', 'r-4', 'r-5', 'r-6', 'r-7', 'r-8', 'r-9']),
                 new CashRoundingConfig(2, 0.50, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
 
             '1.00 interval default currency' => [
@@ -457,7 +460,7 @@ EOF;
                 ],
                 $ids->getList(['r-4', 'r-5']),
                 new CashRoundingConfig(2, 1.00, true),
-                $this->otherCurrencyId,
+                self::$otherCurrencyId,
             ],
         ];
     }
@@ -475,29 +478,29 @@ EOF;
         $definition = $this->registerDefinition(PriceFieldDefinition::class);
 
         $currency = [
-            'id' => $this->otherCurrencyId,
+            'id' => self::$otherCurrencyId,
             'name' => 'test',
             'factor' => 1.5,
             'symbol' => 'A',
             'shortName' => 'A',
             'isoCode' => 'A',
-            'itemRounding' => json_decode(json_encode($rounding), true),
-            'totalRounding' => json_decode(json_encode($rounding), true),
+            'itemRounding' => json_decode(json_encode($rounding, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
+            'totalRounding' => json_decode(json_encode($rounding, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
         ];
 
         $this->getContainer()
             ->get('currency.repository')
             ->upsert([$currency], Context::createDefaultContext());
 
-        $ids = new TestDataCollection(Context::createDefaultContext());
+        $ids = new TestDataCollection();
 
         $this->getContainer()
             ->get(EntityWriter::class)
-            ->insert($definition, $records, WriteContext::createFromContext($ids->getContext()));
+            ->insert($definition, $records, WriteContext::createFromContext(Context::createDefaultContext()));
 
         // other currency provided? switch factor to 1.5 of above currency
         $factor = 1.0;
-        if ($currencyId === $this->otherCurrencyId) {
+        if ($currencyId === self::$otherCurrencyId) {
             $factor = 1.5;
         }
 

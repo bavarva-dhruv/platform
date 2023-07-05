@@ -1,9 +1,13 @@
 import template from './sw-media-index.html.twig';
 import './sw-media-index.scss';
 
-const { Component, Context } = Shopware;
+const { Context } = Shopware;
 
-Component.register('sw-media-index', {
+/**
+ * @package content
+ */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory', 'mediaService', 'acl'],
@@ -56,6 +60,7 @@ Component.register('sw-media-index', {
 
     watch: {
         routeFolderId() {
+            this.term = null;
             this.updateFolder();
         },
     },
@@ -170,4 +175,4 @@ Component.register('sw-media-index', {
             });
         },
     },
-});
+};

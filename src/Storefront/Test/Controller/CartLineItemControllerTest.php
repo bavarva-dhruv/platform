@@ -3,12 +3,10 @@
 namespace Shopware\Storefront\Test\Controller;
 
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\Checkout\Cart\Rule\GoodsPriceRule;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
@@ -21,6 +19,9 @@ use Symfony\Component\HttpFoundation\Session\Flash\FlashBagInterface;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 
+/**
+ * @internal
+ */
 class CartLineItemControllerTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -28,6 +29,7 @@ class CartLineItemControllerTest extends TestCase
 
     /**
      * @before
+     *
      * @after
      */
     public function clearFlashBag(): void
@@ -38,12 +40,12 @@ class CartLineItemControllerTest extends TestCase
     /**
      * @dataProvider productNumbers
      */
-    public function testAddProductByNumber(?string $productId, string $productNumber): void
+    public function testAddAndDeleteProductByNumber(string $productId, string $productNumber, bool $available = true): void
     {
         $contextToken = Uuid::randomHex();
 
         $cartService = $this->getContainer()->get(CartService::class);
-        if ($productId) {
+        if ($productId && $available) {
             $this->createProduct($productId, $productNumber);
         }
         $request = $this->createRequest(['number' => $productNumber]);
@@ -51,9 +53,11 @@ class CartLineItemControllerTest extends TestCase
         $salesChannelContext = $this->createSalesChannelContext($contextToken);
         $response = $this->getContainer()->get(CartLineItemController::class)->addProductByNumber($request, $salesChannelContext);
 
-        $cartLineItem = $cartService->getCart($contextToken, $salesChannelContext)->getLineItems()->get($productId);
+        $cart = $cartService->getCart($contextToken, $salesChannelContext);
+
+        $cartLineItem = $cart->getLineItems()->get($productId);
         $flashBag = $this->getFlashBag()->all();
-        if ($productId) {
+        if ($productId && $available) {
             static::assertArrayHasKey('success', $flashBag);
             static::assertNotNull($cartLineItem);
         } else {
@@ -62,9 +66,28 @@ class CartLineItemControllerTest extends TestCase
             static::assertNull($cartLineItem);
         }
         static::assertSame(200, $response->getStatusCode());
+
+        // Delete
+        if ($productId === '') {
+            return;
+        }
+
+        $response = $this->getContainer()->get(CartLineItemController::class)->deleteLineItem($cart, $productId, $request, $salesChannelContext);
+
+        $cartLineItem = $cartService->getCart($contextToken, $salesChannelContext)->getLineItems()->get($productId);
+        $flashBag = $this->getFlashBag()->all();
+
+        if ($available) {
+            static::assertArrayHasKey('success', $flashBag);
+        } else {
+            static::assertArrayHasKey('danger', $flashBag);
+        }
+        static::assertNull($cartLineItem);
+
+        static::assertSame(200, $response->getStatusCode());
     }
 
-    public function productNumbers(): array
+    public static function productNumbers(): array
     {
         return [
             [Uuid::randomHex(), 'test.123'],
@@ -73,12 +96,13 @@ class CartLineItemControllerTest extends TestCase
             [Uuid::randomHex(), 'test_123'],
             [Uuid::randomHex(), 'testäüö123'],
             [Uuid::randomHex(), 'test/123'],
-            [null, 'nonExisting'],
-            [null, 'with<br>HTML'],
+            [Uuid::randomHex(), 'test/unavailableProduct', false],
+            ['', 'nonExisting'],
+            ['', 'with<br>HTML'],
         ];
     }
 
-    public function promotions(): array
+    public static function promotions(): array
     {
         return [
             ['testCode'],
@@ -106,24 +130,7 @@ class CartLineItemControllerTest extends TestCase
         $flashBag = $this->getFlashBag()->all();
         static::assertArrayHasKey('danger', $flashBag);
         static::assertSame($this->getContainer()->get('translator')->trans('checkout.promotion-not-found', ['%code%' => \strip_tags($code)]), $flashBag['danger'][0]);
-        static::assertSame(0, $cartService->getCart($contextToken, $salesChannelContext)->getLineItems()->count());
-    }
-
-    private function getLineItemAddPayload(string $productId): array
-    {
-        return [
-            'redirectTo' => 'frontend.cart.offcanvas',
-            'lineItems' => [
-                $productId => [
-                    'id' => $productId,
-                    'referencedId' => $productId,
-                    'type' => 'product',
-                    'stackable' => 1,
-                    'removable' => 1,
-                    'quantity' => 1,
-                ],
-            ],
-        ];
+        static::assertCount(0, $cartService->getCart($contextToken, $salesChannelContext)->getLineItems());
     }
 
     private function getFlashBag(): FlashBagInterface
@@ -183,56 +190,8 @@ class CartLineItemControllerTest extends TestCase
     private function createRequest(array $request = []): Request
     {
         $request = new Request([], $request);
-        $request->setSession($this->getContainer()->get('session'));
+        $request->setSession($this->getSession());
 
         return $request;
-    }
-
-    private function createPaymentWithRule(SalesChannelContext $context): string
-    {
-        $ruleId = Uuid::randomHex();
-
-        $this->getContainer()->get('rule.repository')->create(
-            [['id' => $ruleId, 'name' => 'Demo rule', 'priority' => 1, 'moduleTypes' => ['types' => ['payment']]]],
-            $context->getContext()
-        );
-
-        $this->getContainer()->get('rule_condition.repository')->create(
-            [
-                [
-                    'id' => Uuid::randomHex(),
-                    'type' => (new GoodsPriceRule())->getName(),
-                    'ruleId' => $ruleId,
-                    'value' => [
-                        'amount' => 20.0,
-                        'operator' => Rule::OPERATOR_LTE,
-                    ],
-                ],
-            ],
-            $context->getContext()
-        );
-
-        $paymentId = Uuid::randomHex();
-
-        $this->getContainer()->get('payment_method.repository')->create(
-            [
-                [
-                    'id' => $paymentId,
-                    'name' => 'Test Payment with Rule',
-                    'description' => 'Payment rule test',
-                    'active' => true,
-                    'afterOrderEnabled' => true,
-                    'availabilityRuleId' => $ruleId,
-                    'salesChannels' => [
-                        [
-                            'id' => $context->getSalesChannelId(),
-                        ],
-                    ],
-                ],
-            ],
-            $context->getContext()
-        );
-
-        return $paymentId;
     }
 }

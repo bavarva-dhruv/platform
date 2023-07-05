@@ -1,3 +1,4 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_base_field %}
 <div
     class="sw-field"
@@ -24,6 +25,9 @@
             <slot name="label">
                 {{ label }}
             </slot>
+
+            <sw-ai-copilot-badge v-if="aiBadge" />
+
         </label>
 
         <sw-help-text
@@ -34,7 +38,7 @@
     </div>
     <slot
         name="sw-field-input"
-        v-bind="{identification, error, disabled}"
+        v-bind="{ identification, error, disabled }"
     ></slot>
 
     <sw-field-error :error="error" />

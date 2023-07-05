@@ -5,37 +5,39 @@ namespace Shopware\Core\Checkout\Test\Customer\SalesChannel;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Customer\SalesChannel\AccountNewsletterRecipientResult;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
+ * @internal
+ *
  * @group store-api
  */
+#[Package('customer-order')]
 class AccountNewsletterRecipientRouteTest extends TestCase
 {
-    use IntegrationTestBehaviour;
     use CustomerTestTrait;
+    use IntegrationTestBehaviour;
 
-    private \Symfony\Bundle\FrameworkBundle\KernelBrowser $browser;
+    private KernelBrowser $browser;
 
     private TestDataCollection $ids;
 
-    private EntityRepositoryInterface $customerRepository;
-
-    private EntityRepositoryInterface $newsletterRecipientRepository;
+    private EntityRepository $newsletterRecipientRepository;
 
     protected function setUp(): void
     {
-        $this->ids = new TestDataCollection(Context::createDefaultContext());
+        $this->ids = new TestDataCollection();
 
         $this->browser = $this->createCustomSalesChannelBrowser([
             'id' => $this->ids->create('sales-channel'),
         ]);
         $this->assignSalesChannelContext($this->browser);
-        $this->customerRepository = $this->getContainer()->get('customer.repository');
         $this->newsletterRecipientRepository = $this->getContainer()->get('newsletter_recipient.repository');
     }
 
@@ -49,7 +51,7 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertArrayHasKey('errors', $response);
         static::assertSame('CHECKOUT__CUSTOMER_NOT_LOGGED_IN', $response['errors'][0]['code']);
@@ -71,11 +73,12 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = $this->browser->getResponse();
 
-        static::assertArrayHasKey('contextToken', $response);
+        $contextToken = $response->headers->get(PlatformRequest::HEADER_CONTEXT_TOKEN) ?? '';
+        static::assertNotEmpty($contextToken);
 
-        $this->browser->setServerParameter('HTTP_SW_CONTEXT_TOKEN', $response['contextToken']);
+        $this->browser->setServerParameter('HTTP_SW_CONTEXT_TOKEN', $contextToken);
 
         $this->browser
             ->request(
@@ -85,7 +88,7 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('account_newsletter_recipient', $response['apiAlias']);
         static::assertSame(AccountNewsletterRecipientResult::UNDEFINED, $response['status']);
@@ -107,7 +110,7 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                     'hash' => Uuid::randomHex(),
                 ],
             ],
-            $this->ids->context
+            Context::createDefaultContext()
         );
 
         $this->browser
@@ -120,11 +123,12 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = $this->browser->getResponse();
 
-        static::assertArrayHasKey('contextToken', $response);
+        $contextToken = $response->headers->get(PlatformRequest::HEADER_CONTEXT_TOKEN) ?? '';
+        static::assertNotEmpty($contextToken);
 
-        $this->browser->setServerParameter('HTTP_SW_CONTEXT_TOKEN', $response['contextToken']);
+        $this->browser->setServerParameter('HTTP_SW_CONTEXT_TOKEN', $contextToken);
 
         $this->browser
             ->request(
@@ -132,7 +136,7 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                 '/store-api/account/newsletter-recipient'
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('not-set', $response['status']);
     }
@@ -161,12 +165,15 @@ class AccountNewsletterRecipientRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertArrayHasKey('errors', $response);
         static::assertSame('CHECKOUT__CUSTOMER_NOT_LOGGED_IN', $response['errors'][0]['code']);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function getGuestRegistrationData(string $storefrontUrl = 'http://localhost'): array
     {
         return [

@@ -4,32 +4,37 @@ namespace Shopware\Core\Content\Test\Category\Service;
 
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Test\Cart\Common\Generator;
+use Shopware\Core\Content\Category\CategoryCollection;
 use Shopware\Core\Content\Category\CategoryEntity;
 use Shopware\Core\Content\Category\Exception\CategoryNotFoundException;
 use Shopware\Core\Content\Category\SalesChannel\NavigationRoute;
 use Shopware\Core\Content\Category\Service\NavigationLoader;
 use Shopware\Core\Content\Category\Service\NavigationLoaderInterface;
+use Shopware\Core\Content\Category\Tree\Tree;
 use Shopware\Core\Content\Category\Tree\TreeItem;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Test\IdsCollection;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseHelper\ReflectionHelper;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventDispatcher;
-use function array_map;
-use function array_values;
 
+/**
+ * @internal
+ */
 class NavigationLoaderTest extends TestCase
 {
     use IntegrationTestBehaviour;
 
-    private EntityRepositoryInterface $repository;
+    private EntityRepository $repository;
 
     private NavigationLoaderInterface $navigationLoader;
 
-    public function setUp(): void
+    private IdsCollection $ids;
+
+    protected function setUp(): void
     {
         $this->repository = $this->getContainer()->get('category.repository');
 
@@ -45,8 +50,11 @@ class NavigationLoaderTest extends TestCase
             $this->createMock(NavigationRoute::class)
         );
 
-        /** @var TreeItem[] $treeItems */
-        $treeItems = ReflectionHelper::getMethod(NavigationLoader::class, 'buildTree')->invoke($loader, '1', $this->createSimpleTree());
+        $categories = $this->createSimpleTree();
+
+        $tree = ReflectionHelper::getMethod(NavigationLoader::class, 'getTree')->invoke($loader, '1', new CategoryCollection($categories), \array_shift($categories));
+
+        $treeItems = $tree->getTree();
 
         static::assertCount(3, $treeItems);
         static::assertCount(2, $treeItems['1.1']->getChildren());
@@ -67,6 +75,7 @@ class NavigationLoaderTest extends TestCase
 
         $tree = $this->navigationLoader->load($this->ids->get('category1'), $context, $this->ids->get('category1'));
 
+        static::assertInstanceOf(CategoryEntity::class, $tree->getActive());
         static::assertSame($this->ids->get('category1'), $tree->getActive()->getId());
     }
 
@@ -77,6 +86,7 @@ class NavigationLoaderTest extends TestCase
         $context->getSalesChannel()->setNavigationCategoryId($this->ids->get('rootId'));
 
         $tree = $this->navigationLoader->load($this->ids->get('category1_1'), $context, $this->ids->get('category1'));
+        static::assertInstanceOf(CategoryEntity::class, $tree->getActive());
         static::assertSame($this->ids->get('category1_1'), $tree->getActive()->getId());
     }
 
@@ -104,18 +114,15 @@ class NavigationLoaderTest extends TestCase
 
     public function testLoadDeepNestedTree(): void
     {
-        $category1_1_1Id = Uuid::randomHex();
-        $category1_1_1_1Id = Uuid::randomHex();
-
         $this->createCategoryTree();
         $this->repository->upsert([
             [
-                'id' => $category1_1_1Id,
+                'id' => $this->ids->get('category_1_1_1'),
                 'parentId' => $this->ids->get('category1_1'),
                 'name' => 'category 1.1.1',
                 'children' => [
                     [
-                        'id' => $category1_1_1_1Id,
+                        'id' => $this->ids->get('category_1_1_1_1'),
                         'name' => 'category 1.1.1.1',
                     ],
                 ],
@@ -125,14 +132,57 @@ class NavigationLoaderTest extends TestCase
         $context = Generator::createSalesChannelContext();
         $context->getSalesChannel()->setNavigationCategoryId($this->ids->get('rootId'));
 
-        $tree = $this->navigationLoader->load($category1_1_1_1Id, $context, $this->ids->get('rootId'));
+        $tree = $this->navigationLoader->load($this->ids->get('category_1_1_1_1'), $context, $this->ids->get('rootId'));
 
-        static::assertNotNull($tree->getChildren($category1_1_1Id));
+        static::assertNotNull($tree->getChildren($this->ids->get('category_1_1_1')));
+    }
+
+    public function testWithInactiveFirstLevel(): void
+    {
+        $ids = new IdsCollection();
+
+        $categories = [
+            ['id' => $ids->get('root'), 'name' => 'root', 'active' => true, 'children' => [
+                ['id' => $ids->get('c1'), 'name' => 'c1', 'active' => true, 'children' => [
+                    ['id' => $ids->get('c1.1'), 'name' => 'c1.1', 'active' => false],
+                    ['id' => $ids->get('c1.2'), 'name' => 'c1.2', 'children' => [
+                        ['id' => $ids->get('c1.1.1'), 'name' => 'c1.1.1', 'active' => false],
+                        ['id' => $ids->get('c1.1.2'), 'name' => 'c1.1.2', 'active' => true],
+                        ['id' => $ids->get('c1.1.3'), 'name' => 'c1.1.2', 'visible' => false],
+                    ]],
+                ]],
+                ['id' => $ids->get('c2'), 'name' => 'c2', 'active' => false, 'children' => [
+                    ['id' => $ids->get('c2.1'), 'name' => 'c2.1'],
+                    ['id' => $ids->get('c2.2'), 'name' => 'c2.2'],
+                ]],
+                ['id' => $ids->get('c3'), 'name' => 'c2', 'visible' => false],
+            ]],
+        ];
+
+        $this->getContainer()->get('category.repository')->create($categories, Context::createDefaultContext());
+
+        $context = Generator::createSalesChannelContext();
+        $context->getSalesChannel()->setNavigationCategoryId($ids->get('root'));
+
+        $tree = $this->navigationLoader->load($ids->get('root'), $context, $ids->get('root'), 5);
+
+        $loaded = $this->getIds($tree->getTree());
+        static::assertContains($ids->get('c1'), $loaded);
+        static::assertContains($ids->get('c1.2'), $loaded);
+        static::assertContains($ids->get('c1.1.2'), $loaded);
+
+        static::assertNotContains($ids->get('c2'), $loaded);
+        static::assertNotContains($ids->get('c3'), $loaded);
+        static::assertNotContains($ids->get('c2.1'), $loaded);
+        static::assertNotContains($ids->get('c2.2'), $loaded);
+        static::assertNotContains($ids->get('c1.1'), $loaded);
+        static::assertNotContains($ids->get('c1.1.1'), $loaded);
+        static::assertNotContains($ids->get('c1.1.3'), $loaded);
     }
 
     public function testLoadDifferentDepth(): void
     {
-        $data = new TestDataCollection(Context::createDefaultContext());
+        $data = new TestDataCollection();
         $categories = [
             [
                 'id' => $data->create('root'), 'name' => 'root', 'children' => [
@@ -157,7 +207,7 @@ class NavigationLoaderTest extends TestCase
             ],
         ];
 
-        $this->repository->create($categories, $data->getContext());
+        $this->repository->create($categories, Context::createDefaultContext());
 
         $context = Generator::createSalesChannelContext();
         $context->getSalesChannel()->setNavigationCategoryId($data->get('root'));
@@ -169,11 +219,18 @@ class NavigationLoaderTest extends TestCase
             3
         );
 
+        static::assertInstanceOf(CategoryEntity::class, $tree->getActive());
         static::assertSame($data->get('root'), $tree->getActive()->getId());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('root')));
         static::assertCount(1, $tree->getChildren($data->get('root'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('a')));
         static::assertCount(1, $tree->getChildren($data->get('a'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('b')));
         static::assertCount(1, $tree->getChildren($data->get('b'))->getTree());
-        static::assertCount(0, $tree->getChildren($data->get('c'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('c')));
+        static::assertCount(1, $tree->getChildren($data->get('c'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('d')));
+        static::assertCount(0, $tree->getChildren($data->get('d'))->getTree());
 
         $tree = $this->navigationLoader->load(
             $data->get('root'),
@@ -182,12 +239,20 @@ class NavigationLoaderTest extends TestCase
             4
         );
 
+        static::assertInstanceOf(CategoryEntity::class, $tree->getActive());
         static::assertSame($data->get('root'), $tree->getActive()->getId());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('root')));
         static::assertCount(1, $tree->getChildren($data->get('root'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('a')));
         static::assertCount(1, $tree->getChildren($data->get('a'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('b')));
         static::assertCount(1, $tree->getChildren($data->get('b'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('c')));
         static::assertCount(1, $tree->getChildren($data->get('c'))->getTree());
-        static::assertCount(0, $tree->getChildren($data->get('d'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('d')));
+        static::assertCount(1, $tree->getChildren($data->get('d'))->getTree());
+        static::assertInstanceOf(Tree::class, $tree->getChildren($data->get('e')));
+        static::assertCount(0, $tree->getChildren($data->get('e'))->getTree());
     }
 
     public function testChildrenSortingTest(): void
@@ -199,18 +264,21 @@ class NavigationLoaderTest extends TestCase
 
         $tree = $this->navigationLoader->load($this->ids->get('rootId'), $context, $this->ids->get('rootId'));
 
-        $elements = array_values(array_map(static function (TreeItem $item) {
-            return $item->getCategory()->getName();
-        }, $tree->getChildren($this->ids->get('category3'))->getTree()));
+        static::assertInstanceOf(Tree::class, $tree->getChildren($this->ids->get('category3')));
+        $elements = \array_values(\array_map(static fn (TreeItem $item) => $item->getCategory()->getName(), $tree->getChildren($this->ids->get('category3'))->getTree()));
 
         static::assertSame('Category 3.1', $elements[0]);
         static::assertSame('Category 3.3', $elements[1]);
         static::assertSame('Category 3.2', $elements[2]);
     }
 
+    /**
+     * @return list<CategoryEntity>
+     */
     private function createSimpleTree(): array
     {
         return [
+            new TestTreeAware('1', null),
             new TestTreeAware('1.1', '1'),
             new TestTreeAware('1.1.1', '1.1'),
             new TestTreeAware('1.1.2', '1.1'),
@@ -283,12 +351,33 @@ class NavigationLoaderTest extends TestCase
             ],
         ], Context::createDefaultContext());
     }
+
+    /**
+     * @param TreeItem[] $items
+     *
+     * @return list<string>
+     */
+    private function getIds(array $items): array
+    {
+        $ids = [];
+        foreach ($items as $item) {
+            $ids[] = $item->getId();
+            $ids = [...$ids, ...$this->getIds($item->getChildren())];
+        }
+
+        return $ids;
+    }
 }
 
+/**
+ * @internal
+ */
 class TestTreeAware extends CategoryEntity
 {
-    public function __construct(string $id, string $parentId)
-    {
+    public function __construct(
+        string $id,
+        ?string $parentId
+    ) {
         $this->id = $id;
         $this->parentId = $parentId;
     }

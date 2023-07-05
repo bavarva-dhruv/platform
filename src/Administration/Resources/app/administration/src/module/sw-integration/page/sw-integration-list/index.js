@@ -1,9 +1,13 @@
+/**
+ * @package system-settings
+ */
 import template from './sw-integration-list.html.twig';
 import './sw-integration-list.scss';
 
-const { Component, Mixin, Data: { Criteria } } = Shopware;
+const { Mixin, Data: { Criteria } } = Shopware;
 
-Component.register('sw-integration-list', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['integrationService', 'repositoryFactory', 'acl'],
@@ -38,6 +42,7 @@ Component.register('sw-integration-list', {
             const criteria = new Criteria(1, 25);
 
             criteria.addFilter(Criteria.equals('deletedAt', null));
+            criteria.addFilter(Criteria.equals('app.id', null));
             criteria.addSorting(Criteria.sort('label', 'ASC'));
             criteria.addAssociation('aclRoles');
 
@@ -199,4 +204,4 @@ Component.register('sw-integration-list', {
                 });
         },
     },
-});
+};

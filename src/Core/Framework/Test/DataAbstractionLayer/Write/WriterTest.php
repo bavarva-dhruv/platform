@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\Test\DataAbstractionLayer\Write;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Category\CategoryDefinition;
@@ -12,32 +13,42 @@ use Shopware\Core\Content\Test\Product\ProductBuilder;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Api\Exception\IncompletePrimaryKeyException;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEventFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Runtime;
+use Shopware\Core\Framework\DataAbstractionLayer\Read\EntityReaderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\EntityAggregatorInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearcherInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\VersionManager;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\CloneBehavior;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteTypeIntendException;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriter;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriterInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteContext;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Test\DataAbstractionLayer\Write\NonUuidFkField\NonUuidFkFieldSerializer;
+use Shopware\Core\Framework\Test\DataAbstractionLayer\Write\NonUuidFkField\TestEntityOneDefinition;
+use Shopware\Core\Framework\Test\DataAbstractionLayer\Write\NonUuidFkField\TestEntityTwoDefinition;
 use Shopware\Core\Framework\Test\IdsCollection;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Tax\TaxDefinition;
 
+/**
+ * @internal
+ */
 class WriterTest extends TestCase
 {
     use IntegrationTestBehaviour;
 
-    public $id;
+    private string $id;
 
-    /**
-     * @var Connection
-     */
-    private $connection;
+    private Connection $connection;
 
-    private $idBytes;
+    private string $idBytes;
 
     protected function setUp(): void
     {
@@ -61,7 +72,7 @@ class WriterTest extends TestCase
             $context
         );
 
-        $exists = $this->connection->fetchAll('SELECT * FROM category WHERE id = :id', ['id' => Uuid::fromHexToBytes($id)]);
+        $exists = $this->connection->fetchAllAssociative('SELECT * FROM category WHERE id = :id', ['id' => Uuid::fromHexToBytes($id)]);
         static::assertNotEmpty($exists);
 
         $deleteResult = $this->getWriter()->delete(
@@ -72,7 +83,7 @@ class WriterTest extends TestCase
             $context
         );
 
-        $exists = $this->connection->fetchAll('SELECT * FROM category WHERE id = :id', ['id' => Uuid::fromHexToBytes($id)]);
+        $exists = $this->connection->fetchAllAssociative('SELECT * FROM category WHERE id = :id', ['id' => Uuid::fromHexToBytes($id)]);
         static::assertEmpty($exists);
         static::assertEmpty($deleteResult->getNotFound());
         static::assertNotEmpty($deleteResult->getDeleted());
@@ -94,18 +105,18 @@ class WriterTest extends TestCase
             $context
         );
 
-        $categories = $this->connection->fetchAll(
+        $categories = $this->connection->fetchAllAssociative(
             'SELECT * FROM category WHERE id IN (:id) ',
             ['id' => [Uuid::fromHexToBytes($id), Uuid::fromHexToBytes($id2)]],
-            ['id' => Connection::PARAM_STR_ARRAY]
+            ['id' => ArrayParameterType::STRING]
         );
 
         static::assertCount(2, $categories);
 
-        $translations = $this->connection->fetchAll(
+        $translations = $this->connection->fetchAllAssociative(
             'SELECT * FROM category_translation WHERE category_id IN (:id) ',
             ['id' => [Uuid::fromHexToBytes($id), Uuid::fromHexToBytes($id2)]],
-            ['id' => Connection::PARAM_STR_ARRAY]
+            ['id' => ArrayParameterType::STRING]
         );
 
         static::assertCount(2, $translations);
@@ -121,18 +132,18 @@ class WriterTest extends TestCase
         static::assertEmpty($deleteResult->getNotFound());
         static::assertNotEmpty($deleteResult->getDeleted()[CategoryDefinition::ENTITY_NAME]);
 
-        $categories = $this->connection->fetchAll(
+        $categories = $this->connection->fetchAllAssociative(
             'SELECT * FROM category WHERE id IN (:id) ',
             ['id' => [Uuid::fromHexToBytes($id), Uuid::fromHexToBytes($id2)]],
-            ['id' => Connection::PARAM_STR_ARRAY]
+            ['id' => ArrayParameterType::STRING]
         );
 
         static::assertEmpty($categories);
 
-        $translations = $this->connection->fetchAll(
+        $translations = $this->connection->fetchAllAssociative(
             'SELECT * FROM category_translation WHERE category_id IN (:id) ',
             ['id' => [Uuid::fromHexToBytes($id), Uuid::fromHexToBytes($id2)]],
-            ['id' => Connection::PARAM_STR_ARRAY]
+            ['id' => ArrayParameterType::STRING]
         );
 
         static::assertEmpty($translations);
@@ -154,10 +165,10 @@ class WriterTest extends TestCase
             $context
         );
 
-        $exists = $this->connection->fetchAll(
+        $exists = $this->connection->fetchAllAssociative(
             'SELECT * FROM category WHERE id IN (:id) ',
             ['id' => [Uuid::fromHexToBytes($id), Uuid::fromHexToBytes($id2)]],
-            ['id' => Connection::PARAM_STR_ARRAY]
+            ['id' => ArrayParameterType::STRING]
         );
 
         static::assertCount(2, $exists);
@@ -177,10 +188,10 @@ class WriterTest extends TestCase
         static::assertCount(3, $deleteResult->getNotFound()[CategoryDefinition::ENTITY_NAME]);
         static::assertCount(2, $deleteResult->getDeleted()[CategoryDefinition::ENTITY_NAME]);
 
-        $exists = $this->connection->fetchAll(
+        $exists = $this->connection->fetchAllAssociative(
             'SELECT * FROM category WHERE id IN (:id) ',
             ['id' => [Uuid::fromHexToBytes($id), Uuid::fromHexToBytes($id2)]],
-            ['id' => Connection::PARAM_STR_ARRAY]
+            ['id' => ArrayParameterType::STRING]
         );
 
         static::assertEmpty($exists);
@@ -207,7 +218,7 @@ class WriterTest extends TestCase
             ],
         ], $context);
 
-        $exists = $this->connection->fetchAll(
+        $exists = $this->connection->fetchAllAssociative(
             'SELECT * FROM product_category WHERE product_id = :product AND category_id = :category',
             ['product' => Uuid::fromHexToBytes($productId), 'category' => Uuid::fromHexToBytes($categoryId)]
         );
@@ -217,7 +228,7 @@ class WriterTest extends TestCase
             ['productId' => $productId, 'categoryId' => $categoryId],
         ], $context);
 
-        $exists = $this->connection->fetchAll(
+        $exists = $this->connection->fetchAllAssociative(
             'SELECT * FROM product_category WHERE product_id = :product AND category_id = :category',
             ['product' => Uuid::fromHexToBytes($productId), 'category' => Uuid::fromHexToBytes($categoryId)]
         );
@@ -283,10 +294,10 @@ class WriterTest extends TestCase
             ],
         ], $context);
 
-        $exists = $this->connection->fetchAll(
+        $exists = $this->connection->fetchAllAssociative(
             'SELECT * FROM product_category WHERE product_id IN (:product) AND category_id = :category',
             ['product' => [Uuid::fromHexToBytes($productId), Uuid::fromHexToBytes($productId2)], 'category' => Uuid::fromHexToBytes($categoryId)],
-            ['product' => Connection::PARAM_STR_ARRAY]
+            ['product' => ArrayParameterType::STRING]
         );
         static::assertCount(2, $exists);
 
@@ -295,10 +306,10 @@ class WriterTest extends TestCase
             ['productId' => $productId2, 'categoryId' => $categoryId],
         ], $context);
 
-        $exists = $this->connection->fetchAll(
+        $exists = $this->connection->fetchAllAssociative(
             'SELECT * FROM product_category WHERE product_id IN (:product) AND category_id = :category',
             ['product' => [Uuid::fromHexToBytes($productId), Uuid::fromHexToBytes($productId2)], 'category' => Uuid::fromHexToBytes($categoryId)],
-            ['product' => Connection::PARAM_STR_ARRAY]
+            ['product' => ArrayParameterType::STRING]
         );
         static::assertEmpty($exists);
 
@@ -332,16 +343,18 @@ class WriterTest extends TestCase
             $this->createWriteContext()
         );
 
-        $product = $this->connection->fetchAssoc('SELECT * FROM product WHERE id=:id', [
+        $product = $this->connection->fetchAssociative('SELECT * FROM product WHERE id=:id', [
             'id' => $this->idBytes,
         ]);
+        static::assertIsArray($product);
 
+        static::assertIsArray($product);
         static::assertNotEmpty($product['id']);
     }
 
     public function testInsertWithoutId(): void
     {
-        $productCountBefore = (int) $this->connection->fetchColumn('SELECT COUNT(*) FROM product');
+        $productCountBefore = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM product');
 
         $this->getWriter()->insert(
             $this->getContainer()->get(ProductDefinition::class),
@@ -359,7 +372,7 @@ class WriterTest extends TestCase
             $this->createWriteContext()
         );
 
-        $productCountAfter = (int) $this->connection->fetchColumn('SELECT COUNT(*) FROM product');
+        $productCountAfter = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM product');
 
         static::assertSame($productCountBefore + 1, $productCountAfter);
     }
@@ -397,7 +410,7 @@ class WriterTest extends TestCase
             $this->createWriteContext()
         );
 
-        $product = $this->connection->fetchAssoc('SELECT * FROM product WHERE id=:id', [
+        $product = $this->connection->fetchAssociative('SELECT * FROM product WHERE id=:id', [
             'id' => $this->idBytes,
         ]);
 
@@ -433,9 +446,12 @@ class WriterTest extends TestCase
             $this->createWriteContext()
         );
 
-        $productManufacturer = $this->connection->fetchAssoc('SELECT * FROM product_manufacturer WHERE id=:id', ['id' => Uuid::fromHexToBytes($productManufacturerId)]);
-        $productManufacturerTranslation = $this->connection->fetchAssoc('SELECT * FROM product_manufacturer_translation WHERE product_manufacturer_id=:id', ['id' => Uuid::fromHexToBytes($productManufacturerId)]);
-        $productTranslation = $this->connection->fetchAssoc('SELECT * FROM product_translation WHERE product_id=:id', ['id' => $this->idBytes]);
+        $productManufacturer = $this->connection->fetchAssociative('SELECT * FROM product_manufacturer WHERE id=:id', ['id' => Uuid::fromHexToBytes($productManufacturerId)]);
+        static::assertIsArray($productManufacturer);
+        $productManufacturerTranslation = $this->connection->fetchAssociative('SELECT * FROM product_manufacturer_translation WHERE product_manufacturer_id=:id', ['id' => Uuid::fromHexToBytes($productManufacturerId)]);
+        static::assertIsArray($productManufacturerTranslation);
+        $productTranslation = $this->connection->fetchAssociative('SELECT * FROM product_translation WHERE product_id=:id', ['id' => $this->idBytes]);
+        static::assertIsArray($productTranslation);
 
         static::assertSame('_THE_TITLE_', $productTranslation['name'], print_r($productTranslation, true));
         static::assertSame('<p>html</p>', $productTranslation['description']);
@@ -447,7 +463,8 @@ class WriterTest extends TestCase
     {
         $this->insertEmptyProduct();
 
-        $newProduct = $this->connection->fetchAssoc('SELECT * FROM product WHERE id=:id', ['id' => $this->idBytes]);
+        $newProduct = $this->connection->fetchAssociative('SELECT * FROM product WHERE id=:id', ['id' => $this->idBytes]);
+        static::assertIsArray($newProduct);
 
         $this->getWriter()->update(
             $this->getContainer()->get(ProductDefinition::class),
@@ -457,7 +474,8 @@ class WriterTest extends TestCase
             $this->createWriteContext()
         );
 
-        $product = $this->connection->fetchAssoc('SELECT * FROM product WHERE id=:id', ['id' => $this->idBytes]);
+        $product = $this->connection->fetchAssociative('SELECT * FROM product WHERE id=:id', ['id' => $this->idBytes]);
+        static::assertIsArray($product);
 
         static::assertSame('ABC', $product['ean']);
 
@@ -580,36 +598,10 @@ class WriterTest extends TestCase
             $this->createWriteContext()
         );
 
-//        'POST auth/login' => [
-//            'localeList' => ''
-//        ];
-//
-//        'POST login/auth/language/' {locale: en} => [
-//
-//        ];
-//
-//        'GET /product/abc' => [
-//            'id' => $this->id,
-//            'name' => '', // aus implicit,
-//            'translations' => [],
-//
-//        ];
-//
-//        'GET /product/abc/translation/?' => 'indexAction'
-//        'GET /product/abc/translation/%s' => 'detailAction'
-//
-//        'GET /product/abc/translation/en' => [
-//            'productId' => 'abc',
-//            'languageId' => '2d905256e75149678dd5a32a81b94f1f',
-//            'metaTitle' => 'bar',
-//            'name' => '',
-//            [...]
-//        ]
-//
-//        'POST /product/abc' => [];
+        $product = $this->connection->fetchAssociative('SELECT * FROM product WHERE id=:id', ['id' => $this->idBytes]);
+        static::assertIsArray($product);
 
-        $product = $this->connection->fetchAssoc('SELECT * FROM product WHERE id=:id', ['id' => $this->idBytes]);
-        $productTranslations = $this->connection->fetchAll('SELECT * FROM product_translation WHERE product_id= :id', ['id' => $this->idBytes]);
+        $productTranslations = $this->connection->fetchAllAssociative('SELECT * FROM product_translation WHERE product_id= :id', ['id' => $this->idBytes]);
 
         static::assertNotEmpty($product);
 
@@ -628,7 +620,7 @@ class WriterTest extends TestCase
                 static::assertNull($translation['meta_title']);
                 static::assertNull($translation['keywords']);
             } else {
-                static::assertSame('2ABC', $translation['name']);
+                static::assertSame('bar', $translation['name']);
                 static::assertSame('foo', $translation['description']);
                 static::assertSame('bar', $translation['meta_title']);
                 static::assertSame('fiz,baz', $translation['keywords']);
@@ -732,11 +724,141 @@ class WriterTest extends TestCase
             $productRepository->create([], $context);
             $productRepository->upsert([], $context);
             $productRepository->update([], $context);
-        } catch (\InvalidArgumentException $e) {
+        } catch (\InvalidArgumentException) {
             $exceptionThrown = true;
         }
 
         static::assertFalse($exceptionThrown);
+    }
+
+    public function testCanWriteReadAndDeleteEntitiesWithFKFieldValuesThatAreNotUuids(): void
+    {
+        // Because this test creates new database tables we need to commit the current transaction. Because table
+        // creation auto-commits the current transaction on database level and would cause errors when Doctrine tries to
+        // commit the still-open transaction.
+        $this->connection->commit();
+        $container = $this->getContainer();
+        $context = Context::createDefaultContext();
+        /** @var DefinitionInstanceRegistry $definitionInstanceRegistry */
+        $definitionInstanceRegistry = $container->get(DefinitionInstanceRegistry::class);
+
+        // Prepare test entity 1 that has a non-uuid primary key
+        $this->connection->executeStatement(
+            'CREATE TABLE `test_entity_one` (
+                `technical_name` VARCHAR(255) NOT NULL,
+                `created_at` DATETIME(3) NOT NULL,
+                `updated_at` DATETIME(3) NULL,
+                PRIMARY KEY (`technical_name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;',
+        );
+        $definitionInstanceRegistry->register(new TestEntityOneDefinition());
+        $testEntityOneRepository = new EntityRepository(
+            $definitionInstanceRegistry->getByClassOrEntityName(TestEntityOneDefinition::class),
+            $container->get(EntityReaderInterface::class),
+            $container->get(VersionManager::class),
+            $container->get(EntitySearcherInterface::class),
+            $container->get(EntityAggregatorInterface::class),
+            $container->get('event_dispatcher'),
+            $container->get(EntityLoadedEventFactory::class)
+        );
+
+        // Prepare test entity 2 that references test entity 1
+        $this->connection->executeStatement(
+            'CREATE TABLE `test_entity_two` (
+                `id` BINARY(16) NOT NULL,
+                `test_entity_one_technical_name` VARCHAR(255) NOT NULL,
+                `created_at` DATETIME(3) NOT NULL,
+                `updated_at` DATETIME(3) NULL,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;',
+        );
+        $definitionInstanceRegistry->register(new TestEntityTwoDefinition());
+        $testEntityTwoRepository = new EntityRepository(
+            $definitionInstanceRegistry->getByClassOrEntityName(TestEntityTwoDefinition::class),
+            $container->get(EntityReaderInterface::class),
+            $container->get(VersionManager::class),
+            $container->get(EntitySearcherInterface::class),
+            $container->get(EntityAggregatorInterface::class),
+            $container->get('event_dispatcher'),
+            $container->get(EntityLoadedEventFactory::class)
+        );
+        $container->set(NonUuidFkFieldSerializer::class, new NonUuidFkFieldSerializer());
+
+        // Test creation
+        $testEntityOneRepository->create(
+            [
+                [
+                    'technicalName' => 'Some-Technical-Name',
+                ],
+            ],
+            $context,
+        );
+        $testEntityTwoId = Uuid::randomHex();
+        $testEntityTwoRepository->create(
+            [
+                [
+                    'id' => $testEntityTwoId,
+                    'testEntityOneTechnicalName' => 'Some-Technical-Name',
+                ],
+            ],
+            $context,
+        );
+
+        // Test fetch
+        $fetchedEntityOne = $testEntityOneRepository->search(
+            (new Criteria())->addFilter(new EqualsFilter('technicalName', 'Some-Technical-Name')),
+            $context,
+        );
+        static::assertNotNull($fetchedEntityOne);
+        $fetchedEntityTwo = $testEntityTwoRepository->search(
+            (new Criteria())
+                ->addFilter(new EqualsFilter('id', $testEntityTwoId))
+                ->addAssociation('testEntityOne'),
+            $context,
+        );
+        static::assertNotNull($fetchedEntityTwo);
+
+        // Test deletion
+        $testEntityOneRepository->delete([['technicalName' => 'Some-Technical-Name']], $context);
+        $testEntityTwoRepository->delete([['id' => $testEntityTwoId]], $context);
+
+        // Clean up
+        $this->connection->executeStatement(
+            'DROP TABLE `test_entity_two`;
+            DROP TABLE `test_entity_one`;',
+        );
+        $this->connection->beginTransaction();
+    }
+
+    public function testCanUpdateEntitiesToAddCustomFields(): void
+    {
+        /** @var EntityRepository $productRepository */
+        $productRepository = $this->getContainer()->get('product.repository');
+        $productId = Uuid::randomHex();
+
+        $productRepository->create(
+            [
+                [
+                    'id' => $productId,
+                    'name' => 'foo',
+                    'productNumber' => Uuid::randomHex(),
+                    'tax' => ['id' => Uuid::randomHex(), 'taxRate' => 19, 'name' => 'tax'],
+                    'price' => [['currencyId' => Defaults::CURRENCY, 'gross' => 10, 'net' => 12, 'linked' => false]],
+                    'stock' => 0,
+                ],
+            ],
+            Context::createDefaultContext(),
+        );
+
+        $productRepository->update(
+            [
+                [
+                    'id' => $productId,
+                    'customFields' => ['foo' => 'bar'],
+                ],
+            ],
+            Context::createDefaultContext(),
+        );
     }
 
     public function testCloneVariantTranslation(): void
@@ -768,13 +890,13 @@ class WriterTest extends TestCase
             )
             ->build();
 
-        $this->getContainer()->get('product.repository')->create([$product], $ids->getContext());
+        $this->getContainer()->get('product.repository')->create([$product], Context::createDefaultContext());
 
         $behavior = new CloneBehavior(['productNumber' => 'new-parent'], false);
 
         $this->getContainer()->get('product.repository')->clone(
             $ids->get('parent'),
-            $ids->getContext(),
+            Context::createDefaultContext(),
             $ids->get('new-parent'),
             $behavior
         );
@@ -786,17 +908,18 @@ class WriterTest extends TestCase
 
         $this->getContainer()->get('product.repository')->clone(
             $ids->get('child'),
-            $ids->getContext(),
+            Context::createDefaultContext(),
             $ids->get('new-child'),
             $behavior
         );
 
-        $translations = $this->getContainer()->get(Connection::class)
-            ->fetchAssociative(
-                'SELECT name, description FROM product_translation WHERE language_id = :language AND product_id = :id',
-                ['language' => $ids->getBytes('language'), 'id' => $ids->getBytes('new-child')]
-            );
+        $translations = $this->getContainer()->get(Connection::class)->fetchAssociative(
+            'SELECT name, description FROM product_translation WHERE language_id = :language AND product_id = :id',
+            ['language' => $ids->getBytes('language'), 'id' => $ids->getBytes('new-child')]
+        );
+        static::assertIsArray($translations);
 
+        static::assertIsArray($translations);
         static::assertNull($translations['name']);
         static::assertEquals('update', $translations['description']);
     }
@@ -836,7 +959,7 @@ class WriterTest extends TestCase
         return $this->getContainer()->get(EntityWriter::class);
     }
 
-    private function getMediaRepository(): EntityRepositoryInterface
+    private function getMediaRepository(): EntityRepository
     {
         return $this->getContainer()->get('media.repository');
     }

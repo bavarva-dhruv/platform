@@ -10,39 +10,29 @@ use Shopware\Core\Checkout\Promotion\Cart\PromotionProcessor;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionIntegrationTestBehaviour;
 use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionTestFixtureBehaviour;
 use Shopware\Core\Defaults;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Util\Random;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
-use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class PromotionFixedPriceCalculationTest extends TestCase
 {
     use IntegrationTestBehaviour;
-    use PromotionTestFixtureBehaviour;
     use PromotionIntegrationTestBehaviour;
+    use PromotionTestFixtureBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $productRepository;
+    protected EntityRepository $productRepository;
 
-    /**
-     * @var CartService
-     */
-    protected $cartService;
+    protected CartService $cartService;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    protected $promotionRepository;
-
-    /**
-     * @var SalesChannelContext
-     */
-    private $context;
+    protected EntityRepository $promotionRepository;
 
     protected function setUp(): void
     {
@@ -61,7 +51,6 @@ class PromotionFixedPriceCalculationTest extends TestCase
      * Our price would be 40 EUR. It must not matter how many items and products we have in there,
      * the final price should always be 40 EUR.
      *
-     * @test
      * @group promotions
      */
     public function testFixedUnitDiscount(): void
@@ -96,7 +85,6 @@ class PromotionFixedPriceCalculationTest extends TestCase
      * if a automatic fixed price promotion (no code necessary) discount is removed
      * it should not be added again. This is a new feature - to block automatic promotions.
      *
-     * @test
      * @group promotions
      */
     public function testRemoveOfFixedUnitPromotionsWithoutCode(): void
@@ -123,6 +111,7 @@ class PromotionFixedPriceCalculationTest extends TestCase
         static::assertEquals(33.61, $cart->getPrice()->getNetPrice(), 'Discounted cart does not have expected net price');
 
         $discountLineItem = $cart->getLineItems()->filterType(PromotionProcessor::LINE_ITEM_TYPE)->first();
+        static::assertNotNull($discountLineItem);
         $discountId = $discountLineItem->getId();
 
         // and try to remove promotion
@@ -143,7 +132,6 @@ class PromotionFixedPriceCalculationTest extends TestCase
      * But for your currency defined price, we use 65 as fixed price instead.
      * Our test needs to verify that we use 30 EUR, and end with a product sum of 65 EUR in the end.
      *
-     * @test
      * @group promotions
      */
     public function testFixedUnitPriceDiscountWithCurrencyPrices(): void
@@ -188,7 +176,6 @@ class PromotionFixedPriceCalculationTest extends TestCase
      * This means that our final cart price should be 100 EUR and the discount need to be calculated correctly
      * by considering the existing cart items.
      *
-     * @test
      * @group promotions
      */
     public function testFixedCartPriceDiscount(): void

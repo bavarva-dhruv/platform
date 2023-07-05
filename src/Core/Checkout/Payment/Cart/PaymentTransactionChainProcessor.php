@@ -9,54 +9,38 @@ use Shopware\Core\Checkout\Payment\Cart\PaymentHandler\PaymentHandlerRegistry;
 use Shopware\Core\Checkout\Payment\Cart\PaymentHandler\SynchronousPaymentHandlerInterface;
 use Shopware\Core\Checkout\Payment\Cart\Token\TokenFactoryInterfaceV2;
 use Shopware\Core\Checkout\Payment\Cart\Token\TokenStruct;
-use Shopware\Core\Checkout\Payment\Exception\InvalidOrderException;
 use Shopware\Core\Checkout\Payment\Exception\PaymentProcessException;
-use Shopware\Core\Checkout\Payment\Exception\UnknownPaymentMethodException;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Checkout\Payment\PaymentException;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
-use Shopware\Core\System\StateMachine\StateMachineRegistry;
+use Shopware\Core\System\StateMachine\Loader\InitialStateIdLoader;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 
+#[Package('checkout')]
 class PaymentTransactionChainProcessor
 {
-    private TokenFactoryInterfaceV2 $tokenFactory;
-
-    private EntityRepositoryInterface $orderRepository;
-
-    private RouterInterface $router;
-
-    private PaymentHandlerRegistry $paymentHandlerRegistry;
-
-    private StateMachineRegistry $stateMachineRegistry;
-
-    private SystemConfigService $systemConfigService;
-
+    /**
+     * @internal
+     */
     public function __construct(
-        TokenFactoryInterfaceV2 $tokenFactory,
-        EntityRepositoryInterface $orderRepository,
-        RouterInterface $router,
-        PaymentHandlerRegistry $paymentHandlerRegistry,
-        StateMachineRegistry $stateMachineRegistry,
-        SystemConfigService $systemConfigService
+        private readonly TokenFactoryInterfaceV2 $tokenFactory,
+        private readonly EntityRepository $orderRepository,
+        private readonly RouterInterface $router,
+        private readonly PaymentHandlerRegistry $paymentHandlerRegistry,
+        private readonly SystemConfigService $systemConfigService,
+        private readonly InitialStateIdLoader $initialStateIdLoader
     ) {
-        $this->tokenFactory = $tokenFactory;
-        $this->orderRepository = $orderRepository;
-        $this->router = $router;
-        $this->paymentHandlerRegistry = $paymentHandlerRegistry;
-        $this->stateMachineRegistry = $stateMachineRegistry;
-        $this->systemConfigService = $systemConfigService;
     }
 
     /**
-     * @throws InvalidOrderException
      * @throws PaymentProcessException
-     * @throws UnknownPaymentMethodException
      */
     public function process(
         string $orderId,
@@ -82,19 +66,16 @@ class PaymentTransactionChainProcessor
         $order = $this->orderRepository->search($criteria, $salesChannelContext->getContext())->first();
 
         if (!$order) {
-            throw new InvalidOrderException($orderId);
+            throw PaymentException::invalidOrder($orderId);
         }
 
         $transactions = $order->getTransactions();
         if ($transactions === null) {
-            throw new InvalidOrderException($orderId);
+            throw PaymentException::invalidOrder($orderId);
         }
 
         $transactions = $transactions->filterByStateId(
-            $this->stateMachineRegistry->getInitialState(
-                OrderTransactionStates::STATE_MACHINE,
-                $salesChannelContext->getContext()
-            )->getId()
+            $this->initialStateIdLoader->get(OrderTransactionStates::STATE_MACHINE)
         );
 
         $transaction = $transactions->last();
@@ -104,13 +85,13 @@ class PaymentTransactionChainProcessor
 
         $paymentMethod = $transaction->getPaymentMethod();
         if ($paymentMethod === null) {
-            throw new UnknownPaymentMethodException($transaction->getPaymentMethodId());
+            throw PaymentException::unknownPaymentMethod($transaction->getPaymentMethodId());
         }
 
-        $paymentHandler = $this->paymentHandlerRegistry->getHandlerForPaymentMethod($paymentMethod);
+        $paymentHandler = $this->paymentHandlerRegistry->getPaymentMethodHandler($paymentMethod->getId());
 
         if (!$paymentHandler) {
-            throw new UnknownPaymentMethodException($paymentMethod->getHandlerIdentifier());
+            throw PaymentException::unknownPaymentMethod($paymentMethod->getHandlerIdentifier());
         }
 
         if ($paymentHandler instanceof SynchronousPaymentHandlerInterface) {

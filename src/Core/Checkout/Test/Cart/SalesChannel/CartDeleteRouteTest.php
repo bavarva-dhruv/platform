@@ -3,56 +3,47 @@
 namespace Shopware\Core\Checkout\Test\Cart\SalesChannel;
 
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Checkout\Cart\AbstractCartPersister;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartPersister;
-use Shopware\Core\Checkout\Cart\CartPersisterInterface;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\SalesChannelApiTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\System\SalesChannel\Context\AbstractSalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
+ * @internal
+ *
  * @group store-api
  * @group cart
  */
+#[Package('checkout')]
 class CartDeleteRouteTest extends TestCase
 {
     use IntegrationTestBehaviour;
     use SalesChannelApiTestBehaviour;
 
-    /**
-     * @var \Symfony\Bundle\FrameworkBundle\KernelBrowser
-     */
-    private $browser;
+    private KernelBrowser $browser;
 
-    /**
-     * @var TestDataCollection
-     */
-    private $ids;
+    private TestDataCollection $ids;
 
-    /**
-     * @var \Shopware\Core\Framework\DataAbstractionLayer\EntityRepository
-     */
-    private $productRepository;
+    private EntityRepository $productRepository;
 
-    /**
-     * @var AbstractSalesChannelContextFactory
-     */
-    private $salesChannelFactory;
+    private AbstractSalesChannelContextFactory $salesChannelFactory;
 
-    /**
-     * @var CartPersisterInterface
-     */
-    private $cartPersister;
+    private AbstractCartPersister $cartPersister;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
-        $this->ids = new TestDataCollection(Context::createDefaultContext());
+        $this->ids = new TestDataCollection();
 
         $this->browser = $this->createCustomSalesChannelBrowser([
             'id' => $this->ids->create('sales-channel'),
@@ -85,7 +76,7 @@ class CartDeleteRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(0, $response['price']['totalPrice']);
@@ -108,12 +99,12 @@ class CartDeleteRouteTest extends TestCase
                     ['salesChannelId' => $this->ids->get('sales-channel'), 'visibility' => ProductVisibilityDefinition::VISIBILITY_ALL],
                 ],
             ],
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
 
-        $cart = new Cart('sales-channel', $this->ids->get('token'));
+        $cart = new Cart($this->ids->get('token'));
         $cart->add(new LineItem($this->ids->create('productId'), LineItem::PRODUCT_LINE_ITEM_TYPE, $this->ids->get('productId')));
 
-        $this->cartPersister->save($cart, $this->salesChannelFactory->create($this->ids->get('token'), $this->ids->get('sales-channel')), true);
+        $this->cartPersister->save($cart, $this->salesChannelFactory->create($this->ids->get('token'), $this->ids->get('sales-channel')));
 
         // Check
         $this->browser
@@ -124,7 +115,7 @@ class CartDeleteRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(10, $response['price']['totalPrice']);
@@ -151,7 +142,7 @@ class CartDeleteRouteTest extends TestCase
                 ]
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(0, $response['price']['totalPrice']);

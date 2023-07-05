@@ -5,6 +5,9 @@ const { Component, Mixin } = Shopware;
 const { get } = Shopware.Utils;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @status ready
  * @description Renders a multi select field for data of any kind. This component uses the sw-field base
@@ -64,6 +67,12 @@ Component.register('sw-multi-tag-select', {
             required: false,
             default: searchTerm => searchTerm.length > 0,
         },
+
+        disabled: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
     },
 
     data() {
@@ -85,14 +94,6 @@ Component.register('sw-multi-tag-select', {
         inputIsValid() {
             return this.validate(this.searchTerm);
         },
-    },
-
-    mounted() {
-        this.mountedComponent();
-    },
-
-    beforeDestroy() {
-        this.beforeDestroyComponent();
     },
 
     methods: {

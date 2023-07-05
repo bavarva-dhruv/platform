@@ -20,6 +20,9 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\SalesChannelDefinition;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
 class TaxCalculationTypeTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -60,7 +63,7 @@ class TaxCalculationTypeTest extends TestCase
         static::assertEquals($vertical, $amount->getCalculatedTaxes());
     }
 
-    public function calculationProvider()
+    public static function calculationProvider()
     {
         return [
             [
@@ -173,6 +176,9 @@ class TaxCalculationTypeTest extends TestCase
     }
 }
 
+/**
+ * @internal
+ */
 class ItemBlueprint
 {
     /**
@@ -190,8 +196,11 @@ class ItemBlueprint
      */
     public $taxRate;
 
-    public function __construct(float $price, int $quantity, int $taxRate)
-    {
+    public function __construct(
+        float $price,
+        int $quantity,
+        int $taxRate
+    ) {
         $this->quantity = $quantity;
         $this->price = $price;
         $this->taxRate = $taxRate;

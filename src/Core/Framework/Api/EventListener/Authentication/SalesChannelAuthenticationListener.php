@@ -3,8 +3,9 @@
 namespace Shopware\Core\Framework\Api\EventListener\Authentication;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Api\ApiException;
 use Shopware\Core\Framework\Api\Util\AccessKeyHelper;
-use Shopware\Core\Framework\Routing\Exception\SalesChannelNotFoundException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Routing\KernelListenerPriorities;
 use Shopware\Core\Framework\Routing\RouteScopeCheckTrait;
 use Shopware\Core\Framework\Routing\RouteScopeRegistry;
@@ -13,31 +14,28 @@ use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
-use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
+/**
+ * @internal
+ */
+#[Package('core')]
 class SalesChannelAuthenticationListener implements EventSubscriberInterface
 {
     use RouteScopeCheckTrait;
 
     /**
-     * @var Connection
+     * @internal
      */
-    private $connection;
-
-    /**
-     * @var RouteScopeRegistry
-     */
-    private $routeScopeRegistry;
-
     public function __construct(
-        Connection $connection,
-        RouteScopeRegistry $routeScopeRegistry
+        private readonly Connection $connection,
+        private readonly RouteScopeRegistry $routeScopeRegistry
     ) {
-        $this->connection = $connection;
-        $this->routeScopeRegistry = $routeScopeRegistry;
     }
 
+    /**
+     * @return array<string, string|array{0: string, 1: int}|list<array{0: string, 1?: int}>>
+     */
     public static function getSubscribedEvents(): array
     {
         return [
@@ -57,15 +55,14 @@ class SalesChannelAuthenticationListener implements EventSubscriberInterface
             return;
         }
 
-        if (!$request->headers->has(PlatformRequest::HEADER_ACCESS_KEY)) {
-            throw new UnauthorizedHttpException('header', sprintf('Header "%s" is required.', PlatformRequest::HEADER_ACCESS_KEY));
-        }
-
         $accessKey = $request->headers->get(PlatformRequest::HEADER_ACCESS_KEY);
+        if (!$accessKey) {
+            throw ApiException::unauthorized('header', sprintf('Header "%s" is required.', PlatformRequest::HEADER_ACCESS_KEY));
+        }
 
         $origin = AccessKeyHelper::getOrigin($accessKey);
         if ($origin !== 'sales-channel') {
-            throw new SalesChannelNotFoundException();
+            throw ApiException::salesChannelNotFound();
         }
 
         $salesChannelId = $this->getSalesChannelId($accessKey);
@@ -86,11 +83,11 @@ class SalesChannelAuthenticationListener implements EventSubscriberInterface
             ->from('sales_channel')
             ->where('sales_channel.access_key = :accessKey')
             ->setParameter('accessKey', $accessKey)
-            ->execute()
-            ->fetchColumn();
+            ->executeQuery()
+            ->fetchOne();
 
         if (!$salesChannelId) {
-            throw new SalesChannelNotFoundException();
+            throw ApiException::salesChannelNotFound();
         }
 
         return Uuid::fromBytesToHex($salesChannelId);

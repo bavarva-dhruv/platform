@@ -1,3 +1,7 @@
+/**
+ * @package admin
+ */
+
 import template from './sw-tabs-item.html.twig';
 import './sw-tabs-item.scss';
 
@@ -53,10 +57,29 @@ Component.register('sw-tabs-item', {
             required: false,
             default: false,
         },
+        hasWarning: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
         disabled: {
             type: Boolean,
             required: false,
             default: false,
+        },
+        errorTooltip: {
+            type: String,
+            required: false,
+            default() {
+                return Shopware.Snippet.tc('global.sw-tabs-item.tooltipTabHasErrors');
+            },
+        },
+        warningTooltip: {
+            type: String,
+            required: false,
+            default() {
+                return Shopware.Snippet.tc('global.sw-tabs-item.tooltipTabHasWarnings');
+            },
         },
     },
 
@@ -75,6 +98,7 @@ Component.register('sw-tabs-item', {
             return {
                 'sw-tabs-item--active': this.isActive,
                 'sw-tabs-item--has-error': this.hasError,
+                'sw-tabs-item--has-warning': !this.hasError && this.hasWarning,
                 'sw-tabs-item--is-disabled': this.disabled,
             };
         },
@@ -138,7 +162,13 @@ Component.register('sw-tabs-item', {
                  * non existing route has always the class 'router-link-active'
                  */
                 const resolvedRoute = this.$router.resolve(this.route);
-                const routeExists = resolvedRoute.resolved.matched.length > 0;
+                let routeExists = false;
+                if (Shopware.Service('feature').isActive('VUE3')) {
+                    routeExists = resolvedRoute.matched.length > 0;
+                } else {
+                    routeExists = resolvedRoute.resolved.matched.length > 0;
+                }
+
                 if (!routeExists) {
                     return;
                 }

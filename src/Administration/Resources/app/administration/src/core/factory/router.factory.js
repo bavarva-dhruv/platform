@@ -1,4 +1,6 @@
 /**
+ * @package admin
+ *
  * @module core/factory/router
  */
 
@@ -10,11 +12,12 @@
  * @param {ViewFactory} View
  * @param {ModuleFactory} moduleFactory
  * @param {LoginService} LoginService
- * @returns {{}}
  */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
 export default function createRouter(Router, View, moduleFactory, LoginService) {
     const allRoutes = [];
     const moduleRoutes = [];
+    const vue3 = !!window._features_?.vue3;
     let instance = null;
 
     return {
@@ -48,12 +51,18 @@ export default function createRouter(Router, View, moduleFactory, LoginService) 
         const mergedRoutes = registerModuleRoutesAsChildren(viewAllRoutes, viewModuleRoutes);
 
         // assign to view router options
-        const options = Object.assign({}, opts, {
-            routes: mergedRoutes,
-        });
+        const options = { ...opts, routes: mergedRoutes };
+        if (vue3) {
+            options.history = Router.createWebHashHistory();
+        }
 
         // create router
-        const router = new Router(options);
+        let router;
+        if (vue3) {
+            router = Router.createRouter(options);
+        } else {
+            router = new Router(options);
+        }
 
         beforeRouterInterceptor(router);
         instance = router;
@@ -82,11 +91,14 @@ export default function createRouter(Router, View, moduleFactory, LoginService) 
         const assetPath = getAssetPath();
 
         router.beforeEach((to, from, next) => {
+            const cookieStorage = Shopware.Service('loginService').getStorage();
+            cookieStorage.setItem('lastActivity', `${Math.round(+new Date() / 1000)}`);
+
             setModuleFavicon(to, assetPath);
             const loggedIn = LoginService.isLoggedIn();
             const tokenHandler = new Shopware.Helper.RefreshTokenHelper();
             const loginAllowlist = [
-                '/login', '/login/info', '/login/recovery',
+                '/login/', '/login', '/login/info', '/login/recovery',
             ];
 
             if (to.meta && to.meta.forceRoute === true) {
@@ -94,19 +106,18 @@ export default function createRouter(Router, View, moduleFactory, LoginService) 
             }
 
             // The login route will be called and the user is not logged in, let him see the login.
-            if ((to.name === 'login' ||
+            if (!loggedIn && (to.name === 'login' ||
                 loginAllowlist.includes(to.path) ||
-                to.path.startsWith('/login/user-recovery/'))
-                && !loggedIn
+                to.path.startsWith('/login/user-recovery/') ||
+                to.path.match(/\/inactivity\/login\/[a-z0-9]{32}/))
             ) {
                 return next();
             }
 
             // The login route will be called and the user is logged in, redirect to the dashboard.
-            if ((to.name === 'login' ||
+            if (loggedIn && (to.name === 'login' ||
                 loginAllowlist.includes(to.path) ||
                 to.path.startsWith('/login/user-recovery/'))
-                && loggedIn
             ) {
                 return next({ name: 'core' });
             }
@@ -365,6 +376,10 @@ export default function createRouter(Router, View, moduleFactory, LoginService) 
      * @returns {Vue|null} - View component or null
      */
     function getViewComponent(componentName) {
+        if (vue3) {
+            return Shopware.Application.view.getComponentForRoute(componentName);
+        }
+
         return Shopware.Application.view.getComponent(componentName);
     }
 

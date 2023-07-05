@@ -8,9 +8,10 @@ use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Cart\Rule\ShippingMethodRule;
 use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Exception\UnsupportedOperatorException;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
@@ -22,14 +23,18 @@ use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Type;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class ShippingMethodRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    private EntityRepositoryInterface $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    private EntityRepositoryInterface $conditionRepository;
+    private EntityRepository $conditionRepository;
 
     private Context $context;
 
@@ -223,7 +228,10 @@ class ShippingMethodRuleTest extends TestCase
         static::assertNotNull($this->conditionRepository->search(new Criteria([$id]), $this->context)->get($id));
     }
 
-    public function matchDataProvider(): array
+    /**
+     * @return array<array<string|bool|array<string, string|array<string>>>>
+     */
+    public static function matchDataProvider(): array
     {
         return [
             [
@@ -287,20 +295,22 @@ class ShippingMethodRuleTest extends TestCase
 
     /**
      * @dataProvider matchDataProvider
+     *
+     * @param array<string, string|array<string>> $ruleProperties
      */
     public function testMatch(array $ruleProperties, string $shippingMethodId, bool $expected): void
     {
         $shippingRule = new ShippingMethodRule();
         $shippingRule->assign($ruleProperties);
 
-        $shippingMethod = $this->createMock(ShippingMethodEntity::class);
-        $shippingMethod->method('getId')->willReturn($shippingMethodId);
+        $shippingMethod = new ShippingMethodEntity();
+        $shippingMethod->setId($shippingMethodId);
 
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
         $salesChannelContext->method('getShippingMethod')->willReturn($shippingMethod);
 
         $ruleScope = new CartRuleScope(
-            $this->createMock(Cart::class),
+            new Cart('test'),
             $salesChannelContext
         );
 
@@ -310,21 +320,21 @@ class ShippingMethodRuleTest extends TestCase
     public function testExpectUnsupportedOperatorException(): void
     {
         $shippingMethodRule = new ShippingMethodRule();
-        $shippingMethodRule->assign(['operator' => 'FOO', 'shippingMethodsIds' => []]);
+        $shippingMethodRule->assign(['operator' => 'FOO', 'shippingMethodIds' => []]);
 
-        $shippingMethod = $this->createMock(ShippingMethodEntity::class);
-        $shippingMethod->method('getId')->willReturn(Uuid::randomHex());
+        $shippingMethod = new ShippingMethodEntity();
+        $shippingMethod->setId('965a0713093841ceb86b0f83edd7dab4');
 
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
         $salesChannelContext->method('getShippingMethod')->willReturn($shippingMethod);
 
         $ruleScope = new CartRuleScope(
-            $this->createMock(Cart::class),
+            new Cart('test'),
             $salesChannelContext
         );
 
         $this->expectException(UnsupportedOperatorException::class);
-        $this->expectExceptionMessage('Unsupported operator FOO in Shopware\\Core\\Checkout\\Cart\\Rule\\ShippingMethodRule');
+        $this->expectExceptionMessage('Unsupported operator FOO in Shopware\Core\Framework\Rule\RuleComparison');
 
         $shippingMethodRule->match($ruleScope);
     }

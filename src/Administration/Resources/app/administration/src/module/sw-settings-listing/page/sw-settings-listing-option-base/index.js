@@ -1,10 +1,11 @@
 import template from './sw-settings-listing-option-base.html.twig';
 import './sw-settings-listing-option-base.scss';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-settings-listing-option-base', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory', 'systemConfigApiService'],
@@ -43,11 +44,11 @@ Component.register('sw-settings-listing-option-base', {
         },
 
         customFieldCriteria() {
-            return new Criteria();
+            return new Criteria(1, 25);
         },
 
         productSortingEntityCriteria() {
-            return new Criteria();
+            return new Criteria(1, 25);
         },
 
         isSaveButtonDisabled() {
@@ -204,5 +205,5 @@ Component.register('sw-settings-listing-option-base', {
             this.fetchProductSortingEntity();
         },
     },
-});
+};
 

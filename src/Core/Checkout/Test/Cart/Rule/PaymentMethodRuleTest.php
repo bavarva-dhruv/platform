@@ -8,9 +8,10 @@ use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Cart\Rule\PaymentMethodRule;
 use Shopware\Core\Checkout\Payment\PaymentMethodEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Exception\UnsupportedOperatorException;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
@@ -22,14 +23,18 @@ use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Type;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class PaymentMethodRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    private EntityRepositoryInterface $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    private EntityRepositoryInterface $conditionRepository;
+    private EntityRepository $conditionRepository;
 
     private Context $context;
 
@@ -223,7 +228,10 @@ class PaymentMethodRuleTest extends TestCase
         static::assertNotNull($this->conditionRepository->search(new Criteria([$id]), $this->context)->get($id));
     }
 
-    public function matchDataProvider(): array
+    /**
+     * @return array<array<string|bool|array<string, string|array<string>>>>
+     */
+    public static function matchDataProvider(): array
     {
         return [
             [
@@ -287,20 +295,22 @@ class PaymentMethodRuleTest extends TestCase
 
     /**
      * @dataProvider matchDataProvider
+     *
+     * @param array<string, string|array<string>> $ruleProperties
      */
     public function testMatch(array $ruleProperties, string $paymentMethodId, bool $expected): void
     {
         $paymentMethodRule = new PaymentMethodRule();
         $paymentMethodRule->assign($ruleProperties);
 
-        $paymentMethodEntity = $this->createMock(PaymentMethodEntity::class);
-        $paymentMethodEntity->method('getId')->willReturn($paymentMethodId);
+        $paymentMethodEntity = new PaymentMethodEntity();
+        $paymentMethodEntity->setId($paymentMethodId);
 
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
         $salesChannelContext->method('getPaymentMethod')->willReturn($paymentMethodEntity);
 
         $ruleScope = new CartRuleScope(
-            $this->createMock(Cart::class),
+            new Cart('test'),
             $salesChannelContext
         );
 
@@ -310,21 +320,21 @@ class PaymentMethodRuleTest extends TestCase
     public function testExpectUnsupportedOperatorException(): void
     {
         $paymentMethodRule = new PaymentMethodRule();
-        $paymentMethodRule->assign(['operator' => 'FOO', 'paymentMethodsIds' => []]);
+        $paymentMethodRule->assign(['operator' => 'FOO', 'paymentMethodIds' => []]);
 
-        $paymentMethodEntity = $this->createMock(PaymentMethodEntity::class);
-        $paymentMethodEntity->method('getId')->willReturn(Uuid::randomHex());
+        $paymentMethodEntity = new PaymentMethodEntity();
+        $paymentMethodEntity->setId('965a0713093841ceb86b0f83edd7dab4');
 
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
         $salesChannelContext->method('getPaymentMethod')->willReturn($paymentMethodEntity);
 
         $ruleScope = new CartRuleScope(
-            $this->createMock(Cart::class),
+            new Cart('test'),
             $salesChannelContext
         );
 
         $this->expectException(UnsupportedOperatorException::class);
-        $this->expectExceptionMessage('Unsupported operator FOO in Shopware\\Core\\Checkout\\Cart\\Rule\\PaymentMethodRule');
+        $this->expectExceptionMessage('Unsupported operator FOO in Shopware\Core\Framework\Rule\RuleComparison');
 
         $paymentMethodRule->match($ruleScope);
     }

@@ -9,6 +9,9 @@ use Shopware\Core\Framework\Plugin\Util\ZipUtils;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
 use Symfony\Component\Filesystem\Filesystem;
 
+/**
+ * @internal
+ */
 class PluginExtractorTest extends TestCase
 {
     use KernelTestBehaviour;
@@ -23,10 +26,7 @@ class PluginExtractorTest extends TestCase
      */
     private $filesystem;
 
-    /**
-     * @var PluginExtractor
-     */
-    private $extractor;
+    private PluginExtractor $extractor;
 
     protected function setUp(): void
     {

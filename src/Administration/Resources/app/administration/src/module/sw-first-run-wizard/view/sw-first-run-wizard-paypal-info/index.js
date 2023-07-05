@@ -1,9 +1,11 @@
 import template from './sw-first-run-wizard-paypal-info.html.twig';
 import './sw-first-run-wizard-paypal-info.scss';
 
-const { Component } = Shopware;
-
-Component.register('sw-first-run-wizard-paypal-info', {
+/**
+ * @package merchant-services
+ */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['extensionStoreActionService'],
@@ -48,7 +50,7 @@ Component.register('sw-first-run-wizard-paypal-info', {
                     label: this.$tc('sw-first-run-wizard.general.buttonSkip'),
                     position: 'right',
                     variant: null,
-                    action: 'sw.first.run.wizard.index.markets',
+                    action: 'sw.first.run.wizard.index.plugins',
                     disabled: false,
                 },
                 {
@@ -95,4 +97,4 @@ Component.register('sw-first-run-wizard-paypal-info', {
             });
         },
     },
-});
+};

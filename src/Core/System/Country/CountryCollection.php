@@ -3,16 +3,12 @@
 namespace Shopware\Core\System\Country;
 
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
+use Shopware\Core\Framework\Log\Package;
 
 /**
- * @method void               add(CountryEntity $entity)
- * @method void               set(string $key, CountryEntity $entity)
- * @method CountryEntity[]    getIterator()
- * @method CountryEntity[]    getElements()
- * @method CountryEntity|null get(string $key)
- * @method CountryEntity|null first()
- * @method CountryEntity|null last()
+ * @extends EntityCollection<CountryEntity>
  */
+#[Package('core')]
 class CountryCollection extends EntityCollection
 {
     public function sortCountryAndStates(): void
@@ -34,7 +30,7 @@ class CountryCollection extends EntityCollection
             }
 
             if ($a->getTranslation('name') !== $b->getTranslation('name')) {
-                return strnatcasecmp($a->getTranslation('name'), $b->getTranslation('name'));
+                return strnatcasecmp((string) $a->getTranslation('name'), (string) $b->getTranslation('name'));
             }
 
             return 0;

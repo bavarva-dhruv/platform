@@ -2,11 +2,12 @@ import template from './sw-settings-currency-detail.html.twig';
 import './sw-settings-currency-detail.scss';
 
 const { cloneDeep } = Shopware.Utils.object;
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 const { Criteria } = Shopware.Data;
 const { mapPropertyErrors } = Shopware.Component.getComponentHelper();
 
-Component.register('sw-settings-currency-detail', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory', 'acl', 'feature', 'customFieldDataProviderService'],
@@ -144,7 +145,7 @@ Component.register('sw-settings-currency-detail', {
         },
 
         currencyCountryRoundingCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.addAssociation('country');
             if (this.searchTerm) {
                 criteria.setTerm(this.searchTerm);
@@ -321,4 +322,4 @@ Component.register('sw-settings-currency-detail', {
             });
         },
     },
-});
+};

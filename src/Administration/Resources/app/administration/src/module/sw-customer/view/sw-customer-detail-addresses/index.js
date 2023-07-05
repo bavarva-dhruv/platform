@@ -2,10 +2,15 @@ import { required } from 'src/core/service/validation.service';
 import template from './sw-customer-detail-addresses.html.twig';
 import './sw-customer-detail-addresses.scss';
 
-const { Component, Mixin, EntityDefinition } = Shopware;
+/**
+ * @package customer-order
+ */
+
+const { Mixin, EntityDefinition } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-customer-detail-addresses', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory'],
@@ -111,14 +116,14 @@ Component.register('sw-customer-detail-addresses', {
                 });
                 return;
             }
+
             if (!this.activeCustomer.id) {
                 this.$router.push({ name: 'sw.customer.detail.base', params: { id: this.$route.params.id } });
                 return;
             }
 
-            const customFieldSetCriteria = new Criteria();
-            customFieldSetCriteria.addFilter(Criteria.equals('relations.entityName', 'customer_address'))
-                .addAssociation('customFields');
+            const customFieldSetCriteria = new Criteria(1, 25);
+            customFieldSetCriteria.addFilter(Criteria.equals('relations.entityName', 'customer_address'));
 
             this.customFieldSetRepository.search(customFieldSetCriteria).then((customFieldSets) => {
                 this.customerAddressCustomFieldSets = customFieldSets;
@@ -132,12 +137,12 @@ Component.register('sw-customer-detail-addresses', {
                 property: 'defaultShippingAddress',
                 label: this.$tc('sw-customer.detailAddresses.columnDefaultShippingAddress'),
                 align: 'center',
-                iconLabel: 'default-shopping-cart',
+                iconLabel: 'regular-shopping-cart',
             }, {
                 property: 'defaultBillingAddress',
                 label: this.$tc('sw-customer.detailAddresses.columnDefaultBillingAddress'),
                 align: 'center',
-                iconLabel: 'default-documentation-file',
+                iconLabel: 'regular-file-text',
             }, {
                 property: 'lastName',
                 label: this.$tc('sw-customer.detailAddresses.columnLastName'),
@@ -329,4 +334,4 @@ Component.register('sw-customer-detail-addresses', {
             return `${preFix.charAt(0).toUpperCase()}${preFix.slice(1)}`;
         },
     },
-});
+};

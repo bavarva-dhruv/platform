@@ -69,7 +69,7 @@
                                     :disabled="isLoading || !acl.can('theme.editor')"
                                 >
                                     <sw-icon
-                                            name="small-arrow-medium-down"
+                                            name="regular-chevron-down-xs"
                                             size="16"
                                     />
                                 </sw-button>
@@ -108,7 +108,11 @@
                 </div>
 
                 <div v-else class="sw-theme-manager-detail__content">
-                    <sw-tabs defaultItem="default" @new-item-active="onChangeTab">
+                    <sw-tabs
+                        defaultItem="default"
+                        positionIdentifier="theme-manager-detail-tabs"
+                        @new-item-active="onChangeTab"
+                    >
                         <template #default="{ active }">
                             <sw-tabs-item v-if="hasMoreThanOneTab"
                                           v-for="(tab, tabName) in structuredThemeFields.tabs"
@@ -126,7 +130,7 @@
                                     {% block sw_theme_manager_detail_content_inheritance %}
                                         <div class="sw-theme-manager-detail__inheritance">
                                             {% block sw_theme_manager_detail_content_inheritance_icon %}
-                                                <sw-icon :multicolor="true" size="20" name="custom-inherited"></sw-icon>
+                                                <sw-icon :multicolor="true" size="20" name="regular-link-horizontal"></sw-icon>
                                             {% endblock %}
 
                                             {% block sw_theme_manager_detail_content_inheritance_text %}
@@ -142,7 +146,10 @@
                                 </template>
 
                                 {% block sw_theme_manager_detail_content_info %}
-                                    <sw-card class="sw-theme-manager-detail__info-card">
+                                    <sw-card
+                                        class="sw-theme-manager-detail__info-card"
+                                        positionIdentifier="theme-manager-detail-info"
+                                    >
                                         <div class="sw-theme-manager-detail__info">
 
                                             {% block sw_theme_manager_detail_content_info_image %}
@@ -166,6 +173,7 @@
                                                         :label="$tc('sw-theme-manager.detail.salesChannel')"
                                                         :disabled="!acl.can('theme.editor')"
                                                         :helpText="isDefaultTheme ? $tc('sw-theme-manager.detail.salesChannelHelpText') : null"
+                                                        :placeholder="$tc('sw-theme-manager.detail.placeholder.selectSalesChannel')"
                                                         :selectionDisablingMethod="selectionDisablingMethod">
                                                         <template #result-item="{ item, index }">
                                                             <span v-if="!isThemeCompatible(item)"></span>
@@ -232,6 +240,7 @@
                                         <sw-card v-for="(block, blockName) in tab.blocks"
                                                  :key="blockName"
                                                  class="sw-theme-manager-detail__area"
+                                                 positionIdentifier="theme-manager-detail-content"
                                                  :title="block.label">
 
                                             {% block sw_theme_manager_detail_content_sections %}
@@ -256,7 +265,8 @@
                                                                                 :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
                                                                                 :inherited-value="baseThemeConfig[fieldName].value"
                                                                                 :label="!field.label ? '' : field.label"
-                                                                                :customInheritationCheckFunction="checkInheritance"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
                                                                         >
                                                                             <template #content="{ currentValue, updateCurrentValue, isInherited }">
                                                                                 <sw-field
@@ -281,7 +291,8 @@
                                                                                 :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
                                                                                 :inherited-value="baseThemeConfig[fieldName].value"
                                                                                 :label="!field.label ? '' : field.label"
-                                                                                :customInheritationCheckFunction="checkInheritance"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
                                                                         >
                                                                             <template #content="{ currentValue, updateCurrentValue, isInherited }">
                                                                                 <sw-field
@@ -310,6 +321,8 @@
                                                                                 :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
                                                                                 :inherited-value="baseThemeConfig[fieldName].value"
                                                                                 :label="!field.label ? '' : field.label"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
                                                                         >
                                                                                 <template #content="{ currentValue, updateCurrentValue, isInherited, removeInheritance }">
                                                                                     <sw-media-upload-v2
@@ -336,7 +349,8 @@
                                                                             :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
                                                                             :inherited-value="baseThemeConfig[fieldName].value"
                                                                             :label="!field.label ? '' : field.label"
-                                                                            :customInheritationCheckFunction="checkInheritance"
+                                                                            :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                            @input="handleInheritanceInput($event, fieldName)"
                                                                         >
                                                                             <template #content="{ currentValue, updateCurrentValue, isInherited }">
                                                                                 <sw-field
@@ -360,7 +374,8 @@
                                                                                 :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
                                                                                 :inherited-value="baseThemeConfig[fieldName].value"
                                                                                 :label="!field.label ? '' : field.label"
-                                                                                :customInheritationCheckFunction="checkInheritance"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
                                                                         >
                                                                             <template #content="{ currentValue, updateCurrentValue, isInherited }">
                                                                                 <sw-form-field-renderer
@@ -636,31 +651,33 @@
         </template>
 
         {% block sw_theme_manager_detail_sidebar %}
-            <sw-sidebar slot="sidebar" :propagateWidth="true">
-                {% block sw_theme_manager_detail_sidebar_media %}
-                    <sw-sidebar-media-item
-                        ref="mediaSidebarItem"
-                        :initialFolderId="defaultMediaFolderId">
-                        <template #context-menu-items="media">
-                            {% block sw_theme_manager_detail_sidebar_media_items %}
-                                <template v-if="shouldShowContent" v-for="(tab, tabName) in structuredThemeFields.tabs">
-                                    <template v-for="block in tab.blocks">
-                                        <template v-for="section in block.sections">
-                                            <sw-context-menu-item
-                                                v-for="(field, fieldName) in section.fields"
-                                                v-if="themeConfig[fieldName] && field.type === 'media'"
-                                                :key="fieldName"
-                                                @click="onAddMediaToTheme(media.mediaItem, currentThemeConfig[fieldName])">
-                                                {{ $tc('sw-theme-manager.modal.addToMediaLabel', 0, { name: field.label }) }}
-                                            </sw-context-menu-item>
+            <template #sidebar>
+                <sw-sidebar :propagateWidth="true">
+                    {% block sw_theme_manager_detail_sidebar_media %}
+                        <sw-sidebar-media-item
+                            ref="mediaSidebarItem"
+                            :initialFolderId="defaultMediaFolderId">
+                            <template #context-menu-items="media">
+                                {% block sw_theme_manager_detail_sidebar_media_items %}
+                                    <template v-if="shouldShowContent" v-for="(tab, tabName) in structuredThemeFields.tabs">
+                                        <template v-for="block in tab.blocks">
+                                            <template v-for="section in block.sections">
+                                                <sw-context-menu-item
+                                                    v-for="(field, fieldName) in section.fields"
+                                                    v-if="themeConfig[fieldName] && field.type === 'media'"
+                                                    :key="fieldName"
+                                                    @click="onAddMediaToTheme(media.mediaItem, currentThemeConfig[fieldName])">
+                                                    {{ $tc('sw-theme-manager.modal.addToMediaLabel', 0, { name: field.label }) }}
+                                                </sw-context-menu-item>
+                                            </template>
                                         </template>
                                     </template>
-                                </template>
-                            {% endblock %}
-                        </template>
-                    </sw-sidebar-media-item>
-                {% endblock %}
-            </sw-sidebar>
+                                {% endblock %}
+                            </template>
+                        </sw-sidebar-media-item>
+                    {% endblock %}
+                </sw-sidebar>
+            </template>
         {% endblock %}
     </sw-page>
 {% endblock %}

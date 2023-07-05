@@ -10,7 +10,8 @@ use Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Traits\PromotionTestFixtu
 use Shopware\Core\Checkout\Test\Customer\SalesChannel\CustomerTestTrait;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -18,25 +19,21 @@ use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class PromotionIndexerTest extends TestCase
 {
     use CustomerTestTrait;
     use IntegrationTestBehaviour;
     use PromotionTestFixtureBehaviour;
 
-    /**
-     * @var TestDataCollection
-     */
-    private $ids;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $customerRepository;
+    private TestDataCollection $ids;
 
     protected function setUp(): void
     {
-        $this->ids = new TestDataCollection(Context::createDefaultContext());
+        $this->ids = new TestDataCollection();
     }
 
     public function testPromotionIndexerUpdateReturnNullIfGeneratingCode(): void
@@ -45,10 +42,10 @@ class PromotionIndexerTest extends TestCase
 
         $salesChannelContext = $this->createSalesChannelContext();
 
-        /** @var EntityRepositoryInterface $promotionRepository */
+        /** @var EntityRepository $promotionRepository */
         $promotionRepository = $this->getContainer()->get('promotion.repository');
 
-        /** @var EntityRepositoryInterface $promotionIndividualRepository */
+        /** @var EntityRepository $promotionIndividualRepository */
         $promotionIndividualRepository = $this->getContainer()->get('promotion_individual_code.repository');
 
         $voucherA = $this->ids->create('voucherA');
@@ -56,6 +53,8 @@ class PromotionIndexerTest extends TestCase
         $writtenEvent = $this->createPromotion($voucherA, $voucherA, $promotionRepository, $salesChannelContext);
         $promotionEvent = $writtenEvent->getEventByEntityName(PromotionDefinition::ENTITY_NAME);
 
+        static::assertNotNull($promotionEvent);
+        static::assertNotEmpty($promotionEvent->getWriteResults()[0]);
         $promotionId = $promotionEvent->getWriteResults()[0]->getPayload()['id'];
 
         $userId = Uuid::randomHex();
@@ -76,7 +75,7 @@ class PromotionIndexerTest extends TestCase
 
         $salesChannelContext = $this->createSalesChannelContext();
 
-        /** @var EntityRepositoryInterface $promotionRepository */
+        /** @var EntityRepository $promotionRepository */
         $promotionRepository = $this->getContainer()->get('promotion.repository');
 
         $voucherA = $this->ids->create('voucherA');

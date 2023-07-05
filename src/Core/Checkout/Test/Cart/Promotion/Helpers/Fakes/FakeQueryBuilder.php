@@ -2,28 +2,44 @@
 
 namespace Shopware\Core\Checkout\Test\Cart\Promotion\Helpers\Fakes;
 
+use Doctrine\DBAL\Cache\ArrayResult;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
+use Doctrine\DBAL\Result;
+use Shopware\Core\Framework\Log\Package;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class FakeQueryBuilder extends QueryBuilder
 {
+    private readonly Connection $connection;
+
     /**
-     * @var array
+     * @param array<mixed> $dbRows
      */
-    private $dbRows = [];
-
-    public function __construct(Connection $connection, array $dbRows)
-    {
+    public function __construct(
+        Connection $connection,
+        private readonly array $dbRows
+    ) {
         parent::__construct($connection);
-
-        $this->dbRows = $dbRows;
+        $this->connection = $connection;
     }
 
-    /**
-     * @return \Doctrine\DBAL\ForwardCompatibility\Result|int|FakeResultStatement
-     */
-    public function execute()
+    public function execute(): Result|int|string
     {
-        return new FakeResultStatement($this->dbRows);
+        return new Result(
+            new ArrayResult($this->dbRows),
+            $this->connection
+        );
+    }
+
+    public function executeQuery(): Result
+    {
+        return new Result(
+            new ArrayResult($this->dbRows),
+            $this->connection
+        );
     }
 }

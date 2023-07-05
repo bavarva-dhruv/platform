@@ -1,9 +1,11 @@
 import template from './sw-first-run-wizard-shopware-account.html.twig';
 import './sw-first-run-wizard-shopware-account.scss';
 
-const { Component } = Shopware;
-
-Component.register('sw-first-run-wizard-shopware-account', {
+/**
+ * @package merchant-services
+ */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['firstRunWizardService'],
@@ -63,10 +65,8 @@ Component.register('sw-first-run-wizard-shopware-account', {
 
         testCredentials() {
             const { shopwareId, password } = this;
-            const language = Shopware.State.get('session').currentLocale;
 
             return this.firstRunWizardService.checkShopwareId({
-                language,
                 shopwareId,
                 password,
             }).then(() => {
@@ -82,4 +82,4 @@ Component.register('sw-first-run-wizard-shopware-account', {
             });
         },
     },
-});
+};

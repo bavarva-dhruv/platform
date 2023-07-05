@@ -16,17 +16,20 @@ use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
 class AnyRuleLineItemMatcherTest extends TestCase
 {
     use IntegrationTestBehaviour;
-    use RulesTestFixtureBehaviour;
     use LineItemTestFixtureBehaviour;
+    use RulesTestFixtureBehaviour;
 
     private AbstractAnyRuleLineItemMatcher $matcher;
 
     private SalesChannelContext $context;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         $this->matcher = new AnyRuleLineItemMatcher();
         $this->context = $this->getContainer()->get(SalesChannelContextFactory::class)->create('test', TestDefaults::SALES_CHANNEL);
@@ -55,7 +58,10 @@ class AnyRuleLineItemMatcherTest extends TestCase
         static::assertEquals($expected, $this->matcher->isMatching($group, $lineItem, $this->context));
     }
 
-    public function lineItemProvider(): iterable
+    /**
+     * @return iterable<string, array<bool>>
+     */
+    public static function lineItemProvider(): iterable
     {
         yield 'Matching line item not in group with rules' => [true, true, false];
         yield 'Matching line item not in group without rules' => [false, false, true];

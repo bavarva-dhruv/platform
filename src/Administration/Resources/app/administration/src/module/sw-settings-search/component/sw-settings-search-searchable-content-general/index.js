@@ -1,8 +1,12 @@
+/**
+ * @package system-settings
+ */
 import template from './sw-settings-search-searchable-content-general.html.twig';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 
-Component.register('sw-settings-search-searchable-content-general', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -96,6 +100,10 @@ Component.register('sw-settings-search-searchable-content-general', {
             this.$emit('data-load');
         },
 
+        onInlineEditItem(item) {
+            this.$refs.swSettingsSearchableContentGrid.onDbClickCell(item);
+        },
+
         onResetRanking(currentField) {
             if (!currentField.field) {
                 this.createNotificationError({
@@ -129,4 +137,4 @@ Component.register('sw-settings-search-searchable-content-general', {
             return fieldConfigDefault ? fieldConfigDefault.defaultConfigs.ranking : 0;
         },
     },
-});
+};

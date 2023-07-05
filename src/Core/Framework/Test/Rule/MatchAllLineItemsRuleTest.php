@@ -10,9 +10,10 @@ use Shopware\Core\Checkout\Cart\Rule\LineItemInCategoryRule;
 use Shopware\Core\Checkout\Test\Cart\Rule\Helper\CartRuleHelperTrait;
 use Shopware\Core\Content\Rule\RuleEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Container\AndRule;
 use Shopware\Core\Framework\Rule\Container\MatchAllLineItemsRule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
@@ -21,26 +22,27 @@ use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\Type;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class MatchAllLineItemsRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
-    use DatabaseTransactionBehaviour;
     use CartRuleHelperTrait;
+    use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
     /**
-     * @var EntityRepositoryInterface
+     * @var EntityRepository
      */
     private $ruleRepository;
 
     /**
-     * @var EntityRepositoryInterface
+     * @var EntityRepository
      */
     private $conditionRepository;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
     protected function setUp(): void
     {
@@ -126,6 +128,8 @@ class MatchAllLineItemsRuleTest extends TestCase
 
     /**
      * @dataProvider getCartScopeTestData
+     *
+     * @param array<string> $categoryIds
      */
     public function testIfMatchesAllCorrectWithLineItemScope(
         array $categoryIdsProductA,
@@ -158,7 +162,7 @@ class MatchAllLineItemsRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getCartScopeTestData(): array
+    public static function getCartScopeTestData(): array
     {
         return [
             'all products / equal / match category id' => [['1', '2'], ['1', '3'], MatchAllLineItemsRule::OPERATOR_EQ, ['1'], true],
@@ -172,6 +176,8 @@ class MatchAllLineItemsRuleTest extends TestCase
 
     /**
      * @dataProvider getCartScopeTestMinimumShouldMatchData
+     *
+     * @param array<string> $categoryIds
      */
     public function testIfMatchesMinimumCorrectWithLineItemScope(
         array $categoryIdsProductA,
@@ -197,7 +203,7 @@ class MatchAllLineItemsRuleTest extends TestCase
             $this->createLineItemWithCategories($categoryIdsProductC),
         ]);
 
-        $promotionLineItem = ($this->createLineItem(LineItem::PROMOTION_LINE_ITEM_TYPE, 1, 'PROMO'))->setPayloadValue('promotionId', 'A');
+        $promotionLineItem = $this->createLineItem(LineItem::PROMOTION_LINE_ITEM_TYPE, 1, 'PROMO')->setPayloadValue('promotionId', 'A');
         $lineItemCollection->add($promotionLineItem);
 
         $cart = $this->createCart($lineItemCollection);
@@ -210,7 +216,7 @@ class MatchAllLineItemsRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getCartScopeTestMinimumShouldMatchData(): array
+    public static function getCartScopeTestMinimumShouldMatchData(): array
     {
         return [
             'minimum 2 products / equal / match category id' => [['1', '2'], ['1', '3'], ['2', '3'], MatchAllLineItemsRule::OPERATOR_EQ, ['1'], true],
@@ -222,8 +228,11 @@ class MatchAllLineItemsRuleTest extends TestCase
         ];
     }
 
+    /**
+     * @param array<string> $categoryIds
+     */
     private function createLineItemWithCategories(array $categoryIds): LineItem
     {
-        return ($this->createLineItem())->setPayloadValue('categoryIds', $categoryIds);
+        return $this->createLineItem()->setPayloadValue('categoryIds', $categoryIds);
     }
 }

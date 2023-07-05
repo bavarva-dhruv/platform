@@ -8,6 +8,8 @@ use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityD
 use Shopware\Core\Content\Product\Cart\ProductCartProcessor;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Container\AndRule;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
@@ -15,34 +17,29 @@ use Shopware\Core\Framework\Test\TestCaseBase\SalesChannelApiTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextService;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
+ * @internal
+ *
  * @group store-api
  * @group cart
  */
+#[Package('checkout')]
 class CartItemUpdateRouteTest extends TestCase
 {
     use IntegrationTestBehaviour;
     use SalesChannelApiTestBehaviour;
 
-    /**
-     * @var \Symfony\Bundle\FrameworkBundle\KernelBrowser
-     */
-    private $browser;
+    private KernelBrowser $browser;
 
-    /**
-     * @var TestDataCollection
-     */
-    private $ids;
+    private TestDataCollection $ids;
 
-    /**
-     * @var \Shopware\Core\Framework\DataAbstractionLayer\EntityRepository
-     */
-    private $productRepository;
+    private EntityRepository $productRepository;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
-        $this->ids = new TestDataCollection(Context::createDefaultContext());
+        $this->ids = new TestDataCollection();
 
         $this->browser = $this->createCustomSalesChannelBrowser([
             'id' => $this->ids->create('sales-channel'),
@@ -63,7 +60,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -76,7 +73,7 @@ class CartItemUpdateRouteTest extends TestCase
 
         static::assertSame(200, $this->browser->getResponse()->getStatusCode());
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(10, $response['price']['totalPrice']);
@@ -90,7 +87,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -100,9 +97,9 @@ class CartItemUpdateRouteTest extends TestCase
                 ])
             );
 
-        static::assertSame(200, $this->browser->getResponse()->getStatusCode(), $this->browser->getResponse()->getContent());
+        static::assertSame(200, $this->browser->getResponse()->getStatusCode(), (string) $this->browser->getResponse()->getContent());
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame(2, $response['lineItems'][0]['quantity']);
         static::assertSame(20, $response['price']['totalPrice']);
@@ -117,7 +114,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -130,7 +127,7 @@ class CartItemUpdateRouteTest extends TestCase
 
         static::assertSame(200, $this->browser->getResponse()->getStatusCode());
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(10, $response['price']['totalPrice']);
@@ -144,7 +141,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -158,7 +155,7 @@ class CartItemUpdateRouteTest extends TestCase
 
         static::assertSame(200, $this->browser->getResponse()->getStatusCode());
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertArrayHasKey('test', $response['lineItems'][0]['payload']);
 
@@ -177,7 +174,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -201,8 +198,8 @@ class CartItemUpdateRouteTest extends TestCase
                 ])
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
-        static::assertSame(200, $this->browser->getResponse()->getStatusCode(), json_encode($response));
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
+        static::assertSame(200, $this->browser->getResponse()->getStatusCode(), (string) json_encode($response, \JSON_THROW_ON_ERROR));
 
         static::assertSame('cart', $response['apiAlias']);
         static::assertSame(105, $response['price']['totalPrice']);
@@ -216,7 +213,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -228,9 +225,9 @@ class CartItemUpdateRouteTest extends TestCase
 
         static::assertSame(400, $this->browser->getResponse()->getStatusCode());
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
-        static::assertSame('CHECKOUT__CART_LINEITEM_NOT_STACKABLE', $response['errors'][0]['code']);
+        static::assertSame('CHECKOUT__CART_LINE_ITEM_NOT_STACKABLE', $response['errors'][0]['code']);
     }
 
     public function testUpdateByTypeCredit(): void
@@ -244,7 +241,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -271,7 +268,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -281,7 +278,7 @@ class CartItemUpdateRouteTest extends TestCase
                 ])
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame(200, $this->browser->getResponse()->getStatusCode());
         static::assertSame('item update', $response['lineItems'][0]['label']);
@@ -298,7 +295,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -324,7 +321,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('p1'),
@@ -356,7 +353,7 @@ class CartItemUpdateRouteTest extends TestCase
                 ])
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
 
         static::assertSame(200, $this->browser->getResponse()->getStatusCode());
         static::assertSame(750, $response['lineItems'][0]['price']['unitPrice']);
@@ -366,7 +363,7 @@ class CartItemUpdateRouteTest extends TestCase
     {
         $this->enableAdminAccess();
 
-        $this->ids->context->setRuleIds([
+        Context::createDefaultContext()->setRuleIds([
             $this->ids->create('rule-a'),
             $this->ids->create('rule-b'),
         ]);
@@ -407,11 +404,11 @@ class CartItemUpdateRouteTest extends TestCase
         $this->getContainer()->get('rule.repository')->create([
             ['id' => $this->ids->get('rule-a'), 'name' => 'testA', 'priority' => 1, 'payload' => serialize(new AndRule([new CartAmountRule(Rule::OPERATOR_GTE, 0)]))],
             ['id' => $this->ids->get('rule-b'), 'name' => 'testB', 'priority' => 2, 'payload' => serialize(new AndRule([new CartAmountRule(Rule::OPERATOR_NEQ, 0)]))],
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
 
         $this->getContainer()->get('product.repository')->create(
             [$data],
-            $this->ids->context
+            Context::createDefaultContext()
         );
 
         $this->browser
@@ -421,7 +418,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('product'),
@@ -438,7 +435,7 @@ class CartItemUpdateRouteTest extends TestCase
                 ])
             );
 
-        static::assertSame(200, $this->browser->getResponse()->getStatusCode(), $this->browser->getResponse()->getContent());
+        static::assertSame(200, $this->browser->getResponse()->getStatusCode(), (string) $this->browser->getResponse()->getContent());
 
         $this->browser
             ->request(
@@ -447,7 +444,7 @@ class CartItemUpdateRouteTest extends TestCase
                 [],
                 [],
                 ['CONTENT_TYPE' => 'application/json'],
-                json_encode([
+                (string) json_encode([
                     'items' => [
                         [
                             'id' => $this->ids->get('product'),
@@ -464,7 +461,7 @@ class CartItemUpdateRouteTest extends TestCase
                 ])
             );
 
-        $response = json_decode($this->browser->getResponse()->getContent(), true);
+        $response = json_decode((string) $this->browser->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
         static::assertSame(200, $this->browser->getResponse()->getStatusCode());
         static::assertSame(2222, $response['lineItems'][0]['price']['unitPrice']);
     }
@@ -485,7 +482,7 @@ class CartItemUpdateRouteTest extends TestCase
                     ['salesChannelId' => $this->ids->get('sales-channel'), 'visibility' => ProductVisibilityDefinition::VISIBILITY_ALL],
                 ],
             ],
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
 
         $this->productRepository->create([
             [
@@ -501,7 +498,7 @@ class CartItemUpdateRouteTest extends TestCase
                     ['salesChannelId' => $this->ids->get('sales-channel'), 'visibility' => ProductVisibilityDefinition::VISIBILITY_ALL],
                 ],
             ],
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
     }
 
     private function enableAdminAccess(): void

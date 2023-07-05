@@ -7,7 +7,7 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartBehavior;
-use Shopware\Core\Checkout\Cart\Exception\InvalidCartException;
+use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\Order\OrderConverter;
 use Shopware\Core\Checkout\Cart\Order\OrderPersister;
@@ -32,24 +32,18 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\SalesChannelEntity;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
 class OrderPersisterTest extends TestCase
 {
     use IntegrationTestBehaviour;
 
-    /**
-     * @var OrderPersister
-     */
-    private $orderPersister;
+    private OrderPersister $orderPersister;
 
-    /**
-     * @var Processor
-     */
-    private $cartProcessor;
+    private Processor $cartProcessor;
 
-    /**
-     * @var OrderConverter
-     */
-    private $orderConverter;
+    private OrderConverter $orderConverter;
 
     protected function setUp(): void
     {
@@ -60,7 +54,7 @@ class OrderPersisterTest extends TestCase
 
     public function testSave(): void
     {
-        $cart = new Cart('A', Uuid::randomHex());
+        $cart = new Cart(Uuid::randomHex());
         $cart->add(
             (new LineItem('test', 'test'))
                 ->setPrice(new CalculatedPrice(1, 1, new CalculatedTaxCollection(), new TaxRuleCollection()))
@@ -98,7 +92,7 @@ class OrderPersisterTest extends TestCase
                 new EntityCollection([$order]),
                 null,
                 new Criteria(),
-                $this->getSalesChannelContext()->getContext()
+                Context::createDefaultContext()
             )
         );
 
@@ -109,7 +103,7 @@ class OrderPersisterTest extends TestCase
 
     public function testSaveWithMissingLabel(): void
     {
-        $cart = new Cart('A', 'a-b-c');
+        $cart = new Cart('a-b-c');
         $cart->add(
             (new LineItem('test', LineItem::CREDIT_LINE_ITEM_TYPE))
                 ->setPriceDefinition(new AbsolutePriceDefinition(1))
@@ -124,16 +118,11 @@ class OrderPersisterTest extends TestCase
 
         try {
             $this->orderPersister->persist($processedCart, $context);
-        } catch (InvalidCartException $exception) {
+        } catch (CartException $exception) {
         }
 
-        $messages = [];
-        static::assertInstanceOf(InvalidCartException::class, $exception);
-        foreach ($exception->getCartErrors() as $error) {
-            $messages[] = $error->getMessage();
-        }
-
-        static::assertContains('Line item "test" incomplete. Property "label" missing.', $messages);
+        static::assertInstanceOf(CartException::class, $exception);
+        static::assertStringContainsString('Line item "test" incomplete. Property "label" missing.', $exception->getMessage());
     }
 
     private function getCustomer(): CustomerEntity
@@ -162,7 +151,7 @@ class OrderPersisterTest extends TestCase
         return $customer;
     }
 
-    private function getSalesChannelContext(): MockObject
+    private function getSalesChannelContext(): MockObject&SalesChannelContext
     {
         $customer = $this->getCustomer();
         $salesChannel = new SalesChannelEntity();

@@ -2,6 +2,9 @@
 
 namespace Shopware\Core\Framework\Struct;
 
+use Shopware\Core\Framework\Log\Package;
+
+#[Package('core')]
 trait ExtendableTrait
 {
     /**
@@ -15,7 +18,7 @@ trait ExtendableTrait
      * Adds a new extension struct into the class storage.
      * The passed name is used as unique identifier and has to be stored too.
      */
-    public function addExtension(string $name, ?Struct $extension): void
+    public function addExtension(string $name, Struct $extension): void
     {
         $this->extensions[$name] = $extension;
     }

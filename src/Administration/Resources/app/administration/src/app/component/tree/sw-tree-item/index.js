@@ -4,6 +4,8 @@ import './sw-tree-item.scss';
 const { Component } = Shopware;
 
 /**
+ * @package admin
+ *
  * @private
  */
 Component.register('sw-tree-item', {
@@ -94,31 +96,19 @@ Component.register('sw-tree-item', {
         markInactive: {
             type: Boolean,
             required: false,
-            // TODO: Boolean props should only be opt in and therefore default to false
-            // eslint-disable-next-line vue/no-boolean-default
-            default: () => {
-                return false;
-            },
+            default: false,
         },
 
         shouldFocus: {
             type: Boolean,
             required: false,
-            // TODO: Boolean props should only be opt in and therefore default to false
-            // eslint-disable-next-line vue/no-boolean-default
-            default: () => {
-                return false;
-            },
+            default: false,
         },
 
         shouldShowActiveState: {
             type: Boolean,
             required: false,
-            // TODO: Boolean props should only be opt in and therefore default to false
-            // eslint-disable-next-line vue/no-boolean-default
-            default: () => {
-                return false;
-            },
+            default: false,
         },
 
         activeFocusId: {
@@ -220,6 +210,7 @@ Component.register('sw-tree-item', {
                 return this.item.checked;
             },
             set(isChecked) {
+                // eslint-disable-next-line vue/no-mutating-props
                 this.item.checked = isChecked;
             },
         },
@@ -232,7 +223,7 @@ Component.register('sw-tree-item', {
             if (this.item.initialOpened) {
                 this.openTreeItem(true);
                 this.getTreeItemChildren(this.item);
-                // eslint-disable-next-line vue/no-side-effects-in-computed-properties
+                // eslint-disable-next-line vue/no-side-effects-in-computed-properties,vue/no-mutating-props
                 this.item.initialOpened = false;
             }
             return this.opened;
@@ -436,9 +427,11 @@ Component.register('sw-tree-item', {
         toggleItemCheck(event, item) {
             if (this.checkedGhost && !item.checked) {
                 this.checked = true;
+                // eslint-disable-next-line vue/no-mutating-props
                 this.item.checked = true;
             } else {
                 this.checked = event;
+                // eslint-disable-next-line vue/no-mutating-props
                 this.item.checked = event;
             }
 

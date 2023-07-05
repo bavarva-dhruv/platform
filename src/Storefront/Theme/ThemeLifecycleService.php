@@ -3,97 +3,44 @@
 namespace Shopware\Storefront\Theme;
 
 use Doctrine\DBAL\Connection;
-use Shopware\Core\Content\Media\Exception\DuplicatedMediaFileNameException;
+use GuzzleHttp\Psr7\MimeType;
+use Shopware\Core\Content\Media\Aggregate\MediaFolder\MediaFolderEntity;
 use Shopware\Core\Content\Media\File\FileNameProvider;
 use Shopware\Core\Content\Media\File\FileSaver;
 use Shopware\Core\Content\Media\File\MediaFile;
+use Shopware\Core\Content\Media\MediaException;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\RestrictDeleteViolationException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageEntity;
+use Shopware\Core\System\Locale\LocaleEntity;
 use Shopware\Storefront\Theme\StorefrontPluginConfiguration\StorefrontPluginConfiguration;
 use Shopware\Storefront\Theme\StorefrontPluginConfiguration\StorefrontPluginConfigurationCollection;
-use function GuzzleHttp\Psr7\mimetype_from_filename;
 
+#[Package('storefront')]
 class ThemeLifecycleService
 {
     /**
-     * @var StorefrontPluginRegistryInterface
+     * @internal
      */
-    private $pluginRegistry;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $themeRepository;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $mediaRepository;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $mediaFolderRepository;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $themeMediaRepository;
-
-    /**
-     * @var FileSaver
-     */
-    private $fileSaver;
-
-    /**
-     * @var ThemeFileImporterInterface
-     */
-    private $themeFileImporter;
-
-    /**
-     * @var FileNameProvider
-     */
-    private $fileNameProvider;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $languageRepository;
-
-    private EntityRepositoryInterface $themeChildRepository;
-
-    private Connection $connection;
-
     public function __construct(
-        StorefrontPluginRegistryInterface $pluginRegistry,
-        EntityRepositoryInterface $themeRepository,
-        EntityRepositoryInterface $mediaRepository,
-        EntityRepositoryInterface $mediaFolderRepository,
-        EntityRepositoryInterface $themeMediaRepository,
-        FileSaver $fileSaver,
-        FileNameProvider $fileNameProvider,
-        ThemeFileImporterInterface $themeFileImporter,
-        EntityRepositoryInterface $languageRepository,
-        EntityRepositoryInterface $themeChildRepository,
-        Connection $connection
+        private readonly StorefrontPluginRegistryInterface $pluginRegistry,
+        private readonly EntityRepository $themeRepository,
+        private readonly EntityRepository $mediaRepository,
+        private readonly EntityRepository $mediaFolderRepository,
+        private readonly EntityRepository $themeMediaRepository,
+        private readonly FileSaver $fileSaver,
+        private readonly FileNameProvider $fileNameProvider,
+        private readonly ThemeFileImporterInterface $themeFileImporter,
+        private readonly EntityRepository $languageRepository,
+        private readonly EntityRepository $themeChildRepository,
+        private readonly Connection $connection
     ) {
-        $this->pluginRegistry = $pluginRegistry;
-        $this->themeRepository = $themeRepository;
-        $this->mediaRepository = $mediaRepository;
-        $this->mediaFolderRepository = $mediaFolderRepository;
-        $this->themeMediaRepository = $themeMediaRepository;
-        $this->fileSaver = $fileSaver;
-        $this->fileNameProvider = $fileNameProvider;
-        $this->themeFileImporter = $themeFileImporter;
-        $this->languageRepository = $languageRepository;
-        $this->themeChildRepository = $themeChildRepository;
-        $this->connection = $connection;
     }
 
     public function refreshThemes(
@@ -112,6 +59,7 @@ class ThemeLifecycleService
 
     public function refreshTheme(StorefrontPluginConfiguration $configuration, Context $context): void
     {
+        $themeData = [];
         $themeData['name'] = $configuration->getName();
         $themeData['technicalName'] = $configuration->getTechnicalName();
         $themeData['author'] = $configuration->getAuthor();
@@ -147,8 +95,9 @@ class ThemeLifecycleService
         $parentThemes = $this->getParentThemes($configuration, $themeData['id']);
         $parentCriteria = new Criteria();
         $parentCriteria->addFilter(new EqualsFilter('childId', $themeData['id']));
-        $toDeleteIds = $this->themeChildRepository->searchIds($parentCriteria, $context);
-        $this->themeChildRepository->delete($toDeleteIds->getIds(), $context);
+        /** @var list<array<string, string>> $toDeleteIds */
+        $toDeleteIds = $this->themeChildRepository->searchIds($parentCriteria, $context)->getIds();
+        $this->themeChildRepository->delete($toDeleteIds, $context);
         $this->themeChildRepository->upsert($parentThemes, $context);
     }
 
@@ -166,12 +115,10 @@ class ThemeLifecycleService
         }
 
         $dependentThemes = $theme->getDependentThemes() ?? new ThemeCollection();
-        $ids = array_merge(array_values($dependentThemes->getIds()), [$theme->getId()]);
+        $ids = [...array_values($dependentThemes->getIds()), ...[$theme->getId()]];
 
         $this->removeOldMedia($technicalName, $context);
-        $this->themeRepository->delete(array_map(function (string $id) {
-            return ['id' => $id];
-        }, $ids), $context);
+        $this->themeRepository->delete(array_map(fn (string $id) => ['id' => $id], $ids), $context);
     }
 
     private function getThemeByTechnicalName(string $technicalName, Context $context): ?ThemeEntity
@@ -179,14 +126,19 @@ class ThemeLifecycleService
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('technicalName', $technicalName));
 
-        return $this->themeRepository->search($criteria, $context)->first();
+        $theme = $this->themeRepository->search($criteria, $context)->first();
+
+        return $theme instanceof ThemeEntity ? $theme : null;
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
     private function createMediaStruct(string $path, string $mediaId, ?string $themeFolderId): ?array
     {
         $path = $this->themeFileImporter->getRealPath($path);
 
-        if (!$this->fileExists($path)) {
+        if (!$this->themeFileImporter->fileExists($path)) {
             return null;
         }
 
@@ -197,36 +149,48 @@ class ThemeLifecycleService
             'media' => ['id' => $mediaId, 'mediaFolderId' => $themeFolderId],
             'mediaFile' => new MediaFile(
                 $path,
-                mimetype_from_filename($pathinfo['basename']),
-                $pathinfo['extension'],
-                filesize($path)
+                (string) MimeType::fromFilename($pathinfo['basename']),
+                $pathinfo['extension'] ?? '',
+                (int) filesize($path)
             ),
         ];
     }
 
-    private function getMediaDefaultFolderId(string $folder, Context $context): ?string
+    private function getMediaDefaultFolderId(Context $context): ?string
     {
         $criteria = new Criteria();
-        $criteria->addFilter(new EqualsFilter('media_folder.defaultFolder.entity', $folder));
+        $criteria->addFilter(new EqualsFilter('media_folder.defaultFolder.entity', 'theme'));
         $criteria->addAssociation('defaultFolder');
         $criteria->setLimit(1);
         $defaultFolder = $this->mediaFolderRepository->search($criteria, $context);
         $defaultFolderId = null;
         if ($defaultFolder->count() === 1) {
-            $defaultFolderId = $defaultFolder->first()->getId();
+            $defaultFolder = $defaultFolder->first();
+
+            if ($defaultFolder instanceof MediaFolderEntity) {
+                $defaultFolderId = $defaultFolder->getId();
+            }
         }
 
         return $defaultFolderId;
     }
 
+    /**
+     * @return array<string, array<string, mixed>>
+     */
     private function getTranslationsConfiguration(StorefrontPluginConfiguration $configuration, Context $context): array
     {
         $systemLanguageLocale = $this->getSystemLanguageLocale($context);
 
-        $labelTranslations = $this->getLabelsFromConfig($configuration->getThemeConfig());
+        $themeConfig = $configuration->getThemeConfig();
+        if (!$themeConfig) {
+            return [];
+        }
+
+        $labelTranslations = $this->getLabelsFromConfig($themeConfig);
         $translations = $this->mapTranslations($labelTranslations, 'labels', $systemLanguageLocale);
 
-        $helpTextTranslations = $this->getHelpTextsFromConfig($configuration->getThemeConfig());
+        $helpTextTranslations = $this->getHelpTextsFromConfig($themeConfig);
 
         return array_merge_recursive(
             $translations,
@@ -234,6 +198,11 @@ class ThemeLifecycleService
         );
     }
 
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, array<string, mixed>>
+     */
     private function getLabelsFromConfig(array $config): array
     {
         $translations = [];
@@ -256,11 +225,20 @@ class ThemeLifecycleService
         return $translations;
     }
 
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, array<string, mixed>>
+     */
     private function extractLabels(string $prefix, array $data): array
     {
         $labels = [];
         foreach ($data as $key => $item) {
             if (\array_key_exists('label', $item)) {
+                /**
+                 * @var string $locale
+                 * @var string $label
+                 */
                 foreach ($item['label'] as $locale => $label) {
                     $labels[$locale][$prefix . '.' . $key] = $label;
                 }
@@ -270,6 +248,11 @@ class ThemeLifecycleService
         return $labels;
     }
 
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, array<string, mixed>>
+     */
     private function getHelpTextsFromConfig(array $config): array
     {
         $translations = [];
@@ -281,6 +264,11 @@ class ThemeLifecycleService
         return $translations;
     }
 
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, array<string, mixed>>
+     */
     private function extractHelpTexts(string $prefix, array $data): array
     {
         $helpTexts = [];
@@ -289,17 +277,16 @@ class ThemeLifecycleService
                 continue;
             }
 
+            /**
+             * @var string $locale
+             * @var string $label
+             */
             foreach ($item['helpText'] as $locale => $label) {
                 $helpTexts[$locale][$prefix . '.' . $key] = $label;
             }
         }
 
         return $helpTexts;
-    }
-
-    private function fileExists(string $path): bool
-    {
-        return $this->themeFileImporter->fileExists($path);
     }
 
     private function removeOldMedia(string $technicalName, Context $context): void
@@ -332,18 +319,24 @@ class ThemeLifecycleService
         foreach ($themeMediaData as $item) {
             try {
                 $this->mediaRepository->delete([['id' => $item['mediaId']]], $context);
-            } catch (RestrictDeleteViolationException $e) {
+            } catch (RestrictDeleteViolationException) {
                 // don't delete files that are associated with other entities.
                 // This files will be recreated using the file name strategy for duplicated filenames.
             }
         }
     }
 
-    private function updateMediaInConfiguration(?ThemeEntity $theme, StorefrontPluginConfiguration $pluginConfiguration, Context $context): array
-    {
+    /**
+     * @return array<string, mixed>
+     */
+    private function updateMediaInConfiguration(
+        ?ThemeEntity $theme,
+        StorefrontPluginConfiguration $pluginConfiguration,
+        Context $context
+    ): array {
         $media = [];
         $themeData = [];
-        $themeFolderId = $this->getMediaDefaultFolderId('theme', $context);
+        $themeFolderId = $this->getMediaDefaultFolderId($context);
 
         if ($pluginConfiguration->getPreviewMedia()) {
             $mediaId = Uuid::randomHex();
@@ -362,7 +355,7 @@ class ThemeLifecycleService
             }
         }
 
-        $baseConfig = $pluginConfiguration->getThemeConfig();
+        $baseConfig = $pluginConfiguration->getThemeConfig() ?? [];
 
         if (\array_key_exists('fields', $baseConfig)) {
             foreach ($baseConfig['fields'] as $key => $field) {
@@ -399,9 +392,17 @@ class ThemeLifecycleService
             $this->mediaRepository->create($mediaIds, $context);
 
             foreach ($media as $item) {
+                if (!$item['mediaFile'] instanceof MediaFile) {
+                    throw MediaException::missingFile($item['media']['id']);
+                }
+
                 try {
                     $this->fileSaver->persistFileToMedia($item['mediaFile'], $item['basename'], $item['media']['id'], $context);
-                } catch (DuplicatedMediaFileNameException $e) {
+                } catch (MediaException $e) {
+                    if ($e->getErrorCode() !== MediaException::MEDIA_DUPLICATED_FILE_NAME) {
+                        throw $e;
+                    }
+
                     $newFileName = $this->fileNameProvider->provide(
                         $item['basename'],
                         $item['mediaFile']->getFileExtension(),
@@ -426,10 +427,17 @@ class ThemeLifecycleService
 
         /** @var LanguageEntity $language */
         $language = $this->languageRepository->search($criteria, $context)->first();
+        /** @var LocaleEntity $locale */
+        $locale = $language->getTranslationCode();
 
-        return $language->getTranslationCode()->getCode();
+        return $locale->getCode();
     }
 
+    /**
+     * @param array<string, mixed> $translations
+     *
+     * @return array<string, array<string, mixed>>
+     */
     private function mapTranslations(array $translations, string $property, string $systemLanguageLocale): array
     {
         $result = [];
@@ -452,6 +460,11 @@ class ThemeLifecycleService
         return $result;
     }
 
+    /**
+     * @param array<string, mixed> $themeData
+     *
+     * @return array<string, mixed>
+     */
     private function addParentTheme(StorefrontPluginConfiguration $configuration, array $themeData, Context $context): array
     {
         $lastNotSameTheme = null;
@@ -462,7 +475,8 @@ class ThemeLifecycleService
             ) {
                 continue;
             }
-            $lastNotSameTheme = str_replace('@', '', $themeName);
+            /** @var string $lastNotSameTheme */
+            $lastNotSameTheme = str_replace('@', '', (string) $themeName);
         }
 
         if ($lastNotSameTheme !== null) {
@@ -478,6 +492,9 @@ class ThemeLifecycleService
         return $themeData;
     }
 
+    /**
+     * @return list<array{parentId: string, childId: string}>
+     */
     private function getParentThemes(StorefrontPluginConfiguration $config, string $id): array
     {
         $allThemeConfigs = $this->pluginRegistry->getConfigurations()->getThemes();
@@ -494,14 +511,13 @@ class ThemeLifecycleService
 
         $parentThemes = array_filter(
             $allThemes,
-            fn (array $theme) => \in_array($theme['technicalName'] ?? '', $technicalNames, true)
+            fn (array $theme) => \in_array($theme['technicalName'], $technicalNames, true)
         );
 
         $updateParents = [];
-        /** @var array $parentTheme */
         foreach ($parentThemes as $parentTheme) {
             $updateParents[] = [
-                'parentId' => $parentTheme['parentThemeId'] ?? '',
+                'parentId' => $parentTheme['parentThemeId'],
                 'childId' => $id,
             ];
         }
@@ -509,11 +525,17 @@ class ThemeLifecycleService
         return $updateParents;
     }
 
+    /**
+     * @return list<array{technicalName: string, parentThemeId: string}>
+     */
     private function getAllThemesPlain(): array
     {
-        return $this->connection->fetchAllAssociative(
+        /** @var list<array{technicalName: string, parentThemeId: string}> $result */
+        $result = $this->connection->fetchAllAssociative(
             'SELECT theme.technical_name as technicalName, LOWER(HEX(theme.id)) as parentThemeId FROM theme'
         );
+
+        return $result;
     }
 
     private function isDependentTheme(

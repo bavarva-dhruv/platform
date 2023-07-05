@@ -2,37 +2,29 @@
 
 namespace Shopware\Elasticsearch\Framework;
 
-use Elasticsearch\Client;
+use OpenSearch\Client;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\Language\LanguageCollection;
 
+#[Package('core')]
 class ElasticsearchOutdatedIndexDetector
 {
-    private Client $client;
-
-    private ElasticsearchRegistry $registry;
-
-    private EntityRepositoryInterface $languageRepository;
-
-    private ElasticsearchHelper $helper;
-
+    /**
+     * @internal
+     */
     public function __construct(
-        Client $client,
-        ElasticsearchRegistry $esRegistry,
-        EntityRepositoryInterface $languageRepository,
-        ElasticsearchHelper $helper
+        private readonly Client $client,
+        private readonly ElasticsearchRegistry $registry,
+        private readonly EntityRepository $languageRepository,
+        private readonly ElasticsearchHelper $helper
     ) {
-        $this->client = $client;
-        $this->registry = $esRegistry;
-        $this->languageRepository = $languageRepository;
-        $this->helper = $helper;
     }
 
     /**
-     * @return string[]
+     * @return array<string>
      */
     public function get(): ?array
     {
@@ -54,28 +46,28 @@ class ElasticsearchOutdatedIndexDetector
         return $indicesToBeDeleted;
     }
 
+    /**
+     * @return array<string>
+     */
     public function getAllUsedIndices(): array
     {
         $allIndices = $this->getAllIndices();
 
-        if (empty($allIndices)) {
-            return [];
-        }
-
-        return array_map(function (array $index) {
-            return $index['settings']['index']['provided_name'];
-        }, $allIndices);
+        return array_map(fn (array $index) => $index['settings']['index']['provided_name'], $allIndices);
     }
 
-    private function getLanguages(): EntityCollection
+    private function getLanguages(): LanguageCollection
     {
-        return $this->languageRepository
+        /** @var LanguageCollection $entities */
+        $entities = $this->languageRepository
             ->search(new Criteria(), Context::createDefaultContext())
             ->getEntities();
+
+        return $entities;
     }
 
     /**
-     * @return string[]
+     * @return array<string>
      */
     private function getPrefixes(): array
     {
@@ -94,6 +86,9 @@ class ElasticsearchOutdatedIndexDetector
         return $prefixes;
     }
 
+    /**
+     * @return array{aliases: array<string>, settings: array<mixed>}[]
+     */
     private function getAllIndices(): array
     {
         $prefixes = array_chunk($this->getPrefixes(), 5);

@@ -3,8 +3,11 @@
 namespace Shopware\Storefront\Page\Product\Review;
 
 use Shopware\Core\Content\Product\Aggregate\ProductReview\ProductReviewEntity;
+use Shopware\Core\Content\Product\SalesChannel\Review\RatingMatrix;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Storefront\Framework\Page\StorefrontSearchResult;
 
+#[Package('storefront')]
 class ReviewLoaderResult extends StorefrontSearchResult
 {
     /**
@@ -22,10 +25,7 @@ class ReviewLoaderResult extends StorefrontSearchResult
      */
     protected $reviews;
 
-    /**
-     * @var RatingMatrix
-     */
-    protected $matrix;
+    protected RatingMatrix $matrix;
 
     /**
      * @var ProductReviewEntity|null

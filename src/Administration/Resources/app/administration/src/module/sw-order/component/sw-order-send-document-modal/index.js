@@ -1,10 +1,14 @@
 import template from './sw-order-send-document-modal.html.twig';
 import './sw-order-send-document-modal.scss';
 
-const { Component } = Shopware;
+/**
+ * @package customer-order
+ */
+
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-order-send-document-modal', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -43,7 +47,7 @@ Component.register('sw-order-send-document-modal', {
         },
 
         mailTemplateCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.addAssociation('mailTemplateType');
             criteria.addFilter(
                 Criteria.equalsAny(
@@ -61,7 +65,7 @@ Component.register('sw-order-send-document-modal', {
         },
 
         mailTemplateSendCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.addAssociation('mailTemplateType');
 
             return criteria;
@@ -163,4 +167,4 @@ Component.register('sw-order-send-document-modal', {
                 });
         },
     },
-});
+};

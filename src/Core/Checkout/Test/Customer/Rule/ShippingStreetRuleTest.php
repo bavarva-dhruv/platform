@@ -8,37 +8,35 @@ use Shopware\Core\Checkout\CheckoutRuleScope;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEntity;
 use Shopware\Core\Checkout\Customer\Rule\ShippingStreetRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Rule\Exception\UnsupportedValueException;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Type;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class ShippingStreetRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $conditionRepository;
+    private EntityRepository $conditionRepository;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
     private ShippingStreetRule $rule;
 
@@ -164,15 +162,19 @@ class ShippingStreetRuleTest extends TestCase
     /**
      * @dataProvider getMatchValues
      */
-    public function testRuleMatching(string $operator, bool $isMatching, string $shippingStreet): void
+    public function testRuleMatching(string $operator, bool $isMatching, string $shippingStreet, bool $noAddress = false): void
     {
         $streetName = 'kyln123';
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $location = $this->createMock(ShippingLocation::class);
 
         $customerAddress = new CustomerAddressEntity();
         $customerAddress->setStreet($shippingStreet);
-        $location->method('getAddress')->willReturn($customerAddress);
+
+        if ($noAddress) {
+            $customerAddress = null;
+        }
+
+        $location = new ShippingLocation(new CountryEntity(), null, $customerAddress);
         $salesChannelContext->method('getShippingLocation')->willReturn($location);
         $scope = new CheckoutRuleScope($salesChannelContext);
         $this->rule->assign(['streetName' => $streetName, 'operator' => $operator]);
@@ -185,15 +187,33 @@ class ShippingStreetRuleTest extends TestCase
         }
     }
 
-    public function getMatchValues(): array
+    /**
+     * @return \Traversable<string, array<string|bool>>
+     */
+    public static function getMatchValues(): \Traversable
     {
-        return [
-            'operator_oq / not match / street' => [Rule::OPERATOR_EQ, false, 'kyln000'],
-            'operator_oq / match / street' => [Rule::OPERATOR_EQ, true, 'kyln123'],
-            'operator_neq / match / street' => [Rule::OPERATOR_NEQ, true, 'kyln000'],
-            'operator_neq / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'],
-            'operator_empty / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'],
-            'operator_empty / match / street' => [Rule::OPERATOR_EMPTY, true, ' '],
-        ];
+        yield 'operator_eq / not match / street' => [Rule::OPERATOR_EQ, false, 'kyln000'];
+        yield 'operator_eq / match / street' => [Rule::OPERATOR_EQ, true, 'kyln123'];
+        yield 'operator_neq / match / street' => [Rule::OPERATOR_NEQ, true, 'kyln000'];
+        yield 'operator_neq / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'];
+        yield 'operator_empty / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'];
+        yield 'operator_empty / match / street' => [Rule::OPERATOR_EMPTY, true, ' '];
+
+        yield 'operator_neq / match / no customer' => [Rule::OPERATOR_NEQ, true, 'ky', true];
+        yield 'operator_empty / match / no customer' => [Rule::OPERATOR_EMPTY, true, 'ky', true];
+    }
+
+    public function testUnsupportedValue(): void
+    {
+        try {
+            $rule = new ShippingStreetRule();
+            $salesChannelContext = $this->createMock(SalesChannelContext::class);
+            $location = new ShippingLocation(new CountryEntity(), null, new CustomerAddressEntity());
+            $salesChannelContext->method('getShippingLocation')->willReturn($location);
+            $rule->match(new CheckoutRuleScope($salesChannelContext));
+            static::fail('Exception was not thrown');
+        } catch (\Throwable $exception) {
+            static::assertInstanceOf(UnsupportedValueException::class, $exception);
+        }
     }
 }

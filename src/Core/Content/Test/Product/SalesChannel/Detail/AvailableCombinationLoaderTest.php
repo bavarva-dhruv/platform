@@ -4,25 +4,29 @@ namespace Shopware\Core\Content\Test\Product\SalesChannel\Detail;
 
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
+use Shopware\Core\Content\Product\SalesChannel\Detail\AbstractAvailableCombinationLoader;
 use Shopware\Core\Content\Product\SalesChannel\Detail\AvailableCombinationLoader;
 use Shopware\Core\Content\Test\Product\ProductBuilder;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\SalesChannelApiTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
 class AvailableCombinationLoaderTest extends TestCase
 {
     use IntegrationTestBehaviour;
     use SalesChannelApiTestBehaviour;
 
-    private AvailableCombinationLoader $loader;
+    private AbstractAvailableCombinationLoader $loader;
 
-    private EntityRepositoryInterface $productRepository;
+    private EntityRepository $productRepository;
 
     private TestDataCollection $ids;
 
@@ -94,16 +98,16 @@ class AvailableCombinationLoaderTest extends TestCase
             )
             ->build();
 
-        $this->getContainer()->get('product.repository')->create([$products], $this->ids->context);
+        $this->getContainer()->get('product.repository')->create([$products], Context::createDefaultContext());
 
-        $result = $this->loader->load($this->ids->get('a.0'), $this->ids->context, TestDefaults::SALES_CHANNEL);
+        $result = $this->loader->load($this->ids->get('a.0'), Context::createDefaultContext(), TestDefaults::SALES_CHANNEL);
 
         foreach ($result->getCombinations() as $combination) {
             static::assertEquals($expected, $result->isAvailable($combination));
         }
     }
 
-    public function availabilityProvider(): iterable
+    public static function availabilityProvider(): iterable
     {
         yield 'test parentCloseout = true and isCloseout = true and stock = 0 and minPurchase = 1' => [0, false, true, true, 1];
         yield 'test parentCloseout = true and isCloseout = false and stock = 0 and minPurchase = 1' => [0, true, true, false, 1];
@@ -232,10 +236,7 @@ class AvailableCombinationLoaderTest extends TestCase
             'stock' => 10,
             'active' => true,
             'parentId' => $productId,
-            'options' => array_map(static function (array $group) {
-                // Assign first option from each group
-                return ['id' => $group[0]];
-            }, $optionIds),
+            'options' => array_map(static fn (array $group) => ['id' => $group[0]], $optionIds),
         ];
 
         $variant = \array_replace_recursive($variant, $variantOverrides);

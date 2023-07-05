@@ -1,7 +1,23 @@
-import './component';
-import './config';
-import './preview';
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-el-preview-form', () => import('./preview'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-el-config-form', () => import('./config'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-el-form', () => import('./component'));
 
+/**
+ * @private
+ * @package content
+ */
 Shopware.Service('cmsService').registerCmsElement({
     name: 'form',
     label: 'sw-cms.elements.form.label',

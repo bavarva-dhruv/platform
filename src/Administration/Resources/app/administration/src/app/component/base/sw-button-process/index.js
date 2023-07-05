@@ -4,6 +4,9 @@ import './sw-button-process.scss';
 const { Component } = Shopware;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @status ready
  * @description The <u>sw-button-process</u> component extends the sw-button component with visual feedback,
  * indicating loading and success states.

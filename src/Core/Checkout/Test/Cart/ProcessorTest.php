@@ -5,51 +5,52 @@ namespace Shopware\Core\Checkout\Test\Cart;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartBehavior;
+use Shopware\Core\Checkout\Cart\CartDataCollectorInterface;
 use Shopware\Core\Checkout\Cart\CartProcessorInterface;
 use Shopware\Core\Checkout\Cart\Delivery\Struct\Delivery;
 use Shopware\Core\Checkout\Cart\Error\Error;
 use Shopware\Core\Checkout\Cart\LineItem\CartDataCollection;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\LineItem\LineItemCollection;
+use Shopware\Core\Checkout\Cart\Price\AmountCalculator;
 use Shopware\Core\Checkout\Cart\Price\Struct\AbsolutePriceDefinition;
+use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
 use Shopware\Core\Checkout\Cart\Processor;
 use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTax;
 use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRule;
 use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
+use Shopware\Core\Checkout\Cart\Transaction\TransactionProcessor;
+use Shopware\Core\Checkout\Cart\Validator;
 use Shopware\Core\Checkout\Promotion\Cart\Error\AutoPromotionNotFoundError;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Script\Execution\ScriptExecutor;
 use Shopware\Core\Framework\Struct\Struct;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\TaxAddToSalesChannelTestBehaviour;
-use Shopware\Core\Framework\Test\TestCaseHelper\ReflectionHelper;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\AbstractSalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class ProcessorTest extends TestCase
 {
     use IntegrationTestBehaviour;
     use TaxAddToSalesChannelTestBehaviour;
 
-    /**
-     * @var AbstractSalesChannelContextFactory
-     */
-    private $factory;
+    private AbstractSalesChannelContextFactory $factory;
 
-    /**
-     * @var SalesChannelContext
-     */
-    private $context;
+    private SalesChannelContext $context;
 
-    /**
-     * @var Processor
-     */
-    private $processor;
+    private Processor $processor;
 
     protected function setUp(): void
     {
@@ -60,7 +61,7 @@ class ProcessorTest extends TestCase
 
     public function testDeliveryCreatedForDeliverableLineItem(): void
     {
-        $cart = new Cart('test', 'test');
+        $cart = new Cart('test');
 
         $id = Uuid::randomHex();
         $tax = ['id' => Uuid::randomHex(), 'taxRate' => 19, 'name' => 'test'];
@@ -96,7 +97,10 @@ class ProcessorTest extends TestCase
 
         static::assertCount(1, $calculated->getLineItems());
         static::assertTrue($calculated->has($id));
-        static::assertSame(119.99, $calculated->get($id)->getPrice()->getTotalPrice());
+        $item = $calculated->get($id);
+        static::assertInstanceOf(LineItem::class, $item);
+        static::assertInstanceOf(CalculatedPrice::class, $item->getPrice());
+        static::assertSame(119.99, $item->getPrice()->getTotalPrice());
 
         static::assertCount(1, $calculated->getDeliveries());
 
@@ -109,14 +113,15 @@ class ProcessorTest extends TestCase
     {
         $extension = new class() extends Struct {
         };
-        $cart = new Cart('foo', 'bar');
+
+        $cart = new Cart('bar');
         $cart->addExtension('unit-test', $extension);
 
-        $processorProperty = ReflectionHelper::getProperty(Processor::class, 'processors');
-        $originalProcessors = $processorProperty->getValue($this->processor);
-
-        try {
-            $processorProperty->setValue($this->processor, [
+        $processor = new Processor(
+            new Validator([]),
+            $this->createMock(AmountCalculator::class),
+            $this->createMock(TransactionProcessor::class),
+            [
                 new class() implements CartProcessorInterface {
                     public function process(CartDataCollection $data, Cart $original, Cart $toCalculate, SalesChannelContext $context, CartBehavior $behavior): void
                     {
@@ -125,19 +130,19 @@ class ProcessorTest extends TestCase
                         TestCase::assertSame($original->getExtension('unit-test'), $toCalculate->getExtension('unit-test'));
                     }
                 },
-            ]);
+            ],
+            [],
+            $this->createMock(ScriptExecutor::class)
+        );
 
-            $newCart = $this->processor->process($cart, $this->context, new CartBehavior());
+        $newCart = $processor->process($cart, $this->context, new CartBehavior());
 
-            static::assertSame($extension, $newCart->getExtension('unit-test'));
-        } finally {
-            $processorProperty->setValue($this->processor, $originalProcessors);
-        }
+        static::assertSame($extension, $newCart->getExtension('unit-test'));
     }
 
     public function testCalculatedCreditTaxesIncludeCustomItemTax(): void
     {
-        $cart = new Cart('test', 'test');
+        $cart = new Cart('test');
 
         $productId = Uuid::randomHex();
         $customItemId = Uuid::randomHex();
@@ -184,20 +189,18 @@ class ProcessorTest extends TestCase
         $calculated = $this->processor->process($cart, $this->context, new CartBehavior());
 
         static::assertCount(3, $calculated->getLineItems());
-        static::assertNotEmpty($creditLineItem = $calculated->getLineItems()->filterType(LineItem::CREDIT_LINE_ITEM_TYPE)->first());
 
+        $creditLineItem = $calculated->getLineItems()->filterType(LineItem::CREDIT_LINE_ITEM_TYPE)->first();
+        static::assertInstanceOf(LineItem::class, $creditLineItem);
+        static::assertInstanceOf(CalculatedPrice::class, $creditLineItem->getPrice());
         static::assertCount(2, $creditCalculatedTaxes = $creditLineItem->getPrice()->getCalculatedTaxes()->getElements());
 
-        $calculatedTaxForCustomItem = array_filter($creditCalculatedTaxes, function (CalculatedTax $tax) use ($taxForCustomItem) {
-            return (int) $tax->getTaxRate() === $taxForCustomItem;
-        });
+        $calculatedTaxForCustomItem = array_filter($creditCalculatedTaxes, fn (CalculatedTax $tax) => (int) $tax->getTaxRate() === $taxForCustomItem);
 
         static::assertNotEmpty($calculatedTaxForCustomItem);
         static::assertCount(1, $calculatedTaxForCustomItem);
 
-        $calculatedTaxForProductItem = array_filter($creditCalculatedTaxes, function (CalculatedTax $tax) use ($taxForProductItem) {
-            return (int) $tax->getTaxRate() === $taxForProductItem;
-        });
+        $calculatedTaxForProductItem = array_filter($creditCalculatedTaxes, fn (CalculatedTax $tax) => (int) $tax->getTaxRate() === $taxForProductItem);
 
         static::assertNotEmpty($calculatedTaxForProductItem);
         static::assertCount(1, $calculatedTaxForProductItem);
@@ -205,7 +208,7 @@ class ProcessorTest extends TestCase
 
     public function testShippingCostIsCalculatedWithCustomItemOnly(): void
     {
-        $cart = new Cart('test', 'test');
+        $cart = new Cart('test');
 
         $customItemId = Uuid::randomHex();
 
@@ -224,14 +227,18 @@ class ProcessorTest extends TestCase
 
         $calculated = $this->processor->process($cart, $this->context, new CartBehavior());
 
-        static::assertNotEmpty($delivery = $calculated->getDeliveries()->first());
-        static::assertNotEmpty($shippingCalculatedTaxes = $delivery->getShippingCosts()->getCalculatedTaxes()->first());
+        $delivery = $calculated->getDeliveries()->first();
+
+        static::assertInstanceOf(Delivery::class, $delivery);
+
+        $shippingCalculatedTaxes = $delivery->getShippingCosts()->getCalculatedTaxes()->first();
+        static::assertInstanceOf(CalculatedTax::class, $shippingCalculatedTaxes);
         static::assertEquals($taxForCustomItem, $shippingCalculatedTaxes->getTaxRate());
     }
 
     public function testShippingCostCalculatedTaxesIncludeCustomItemTax(): void
     {
-        $cart = new Cart('test', 'test');
+        $cart = new Cart('test');
 
         $productId = Uuid::randomHex();
         $customItemId = Uuid::randomHex();
@@ -278,18 +285,15 @@ class ProcessorTest extends TestCase
 
         $delivery = $calculated->getDeliveries()->first();
 
+        static::assertInstanceOf(Delivery::class, $delivery);
         static::assertCount(2, $shippingCalculatedTaxes = $delivery->getShippingCosts()->getCalculatedTaxes()->getElements());
 
-        $calculatedTaxForCustomItem = array_filter($shippingCalculatedTaxes, function (CalculatedTax $tax) use ($taxForCustomItem) {
-            return (int) $tax->getTaxRate() === $taxForCustomItem;
-        });
+        $calculatedTaxForCustomItem = array_filter($shippingCalculatedTaxes, fn (CalculatedTax $tax) => (int) $tax->getTaxRate() === $taxForCustomItem);
 
         static::assertNotEmpty($calculatedTaxForCustomItem);
         static::assertCount(1, $calculatedTaxForCustomItem);
 
-        $calculatedTaxForProductItem = array_filter($shippingCalculatedTaxes, function (CalculatedTax $tax) use ($taxForProductItem) {
-            return (int) $tax->getTaxRate() === $taxForProductItem;
-        });
+        $calculatedTaxForProductItem = array_filter($shippingCalculatedTaxes, fn (CalculatedTax $tax) => (int) $tax->getTaxRate() === $taxForProductItem);
 
         static::assertNotEmpty($calculatedTaxForProductItem);
         static::assertCount(1, $calculatedTaxForProductItem);
@@ -297,7 +301,7 @@ class ProcessorTest extends TestCase
 
     public function testPersistentErrors(): void
     {
-        $cart = new Cart(Uuid::randomHex(), Uuid::randomHex());
+        $cart = new Cart(Uuid::randomHex());
 
         $cart->addErrors(new NonePersistentError(), new PersistentError());
 
@@ -314,7 +318,7 @@ class ProcessorTest extends TestCase
 
     public function testCartHasErrorDataAddedFromPromotionProcessor(): void
     {
-        $originalCart = new Cart(Uuid::randomHex(), Uuid::randomHex());
+        $originalCart = new Cart(Uuid::randomHex());
 
         $id = Uuid::randomHex();
         $tax = ['id' => Uuid::randomHex(), 'taxRate' => 19, 'name' => 'test'];
@@ -333,7 +337,7 @@ class ProcessorTest extends TestCase
         );
         $originalCart->add(
             (new LineItem(Uuid::randomHex(), LineItem::PROMOTION_LINE_ITEM_TYPE, '', 1))
-            ->setLabel('Discount 15%')
+                ->setLabel('Discount 15%')
         );
         $originalCart->add(
             (new LineItem(Uuid::randomHex(), LineItem::PROMOTION_LINE_ITEM_TYPE, '', 1))
@@ -346,6 +350,34 @@ class ProcessorTest extends TestCase
         }
     }
 
+    public function testProcessorsAndCollectorsAreSkippedIfCartIsEmpty(): void
+    {
+        $cart = new Cart('test');
+
+        $collector = $this->createMock(CartDataCollectorInterface::class);
+        $collector->expects(static::never())
+            ->method('collect');
+
+        $processorMock = $this->createMock(CartProcessorInterface::class);
+        $processorMock->expects(static::never())
+            ->method('process');
+
+        $processor = new Processor(
+            $this->getContainer()->get(Validator::class),
+            $this->getContainer()->get(AmountCalculator::class),
+            $this->getContainer()->get(TransactionProcessor::class),
+            [$processorMock],
+            [$collector],
+            $this->getContainer()->get(ScriptExecutor::class)
+        );
+        $processor->process($cart, $this->context, new CartBehavior());
+    }
+
+    /**
+     * @param array<string|int, mixed|null> $tax
+     *
+     * @return array<string, mixed|null>
+     */
     private function createDummyProduct(string $id, array $tax, int $stock = 10): array
     {
         return [
@@ -367,6 +399,9 @@ class ProcessorTest extends TestCase
     }
 }
 
+/**
+ * @internal
+ */
 class PersistentError extends Error
 {
     public function getId(): string
@@ -389,6 +424,9 @@ class PersistentError extends Error
         return false;
     }
 
+    /**
+     * @return array<string|int, mixed|null>
+     */
     public function getParameters(): array
     {
         return [];
@@ -400,6 +438,9 @@ class PersistentError extends Error
     }
 }
 
+/**
+ * @internal
+ */
 class NonePersistentError extends PersistentError
 {
     public function getId(): string

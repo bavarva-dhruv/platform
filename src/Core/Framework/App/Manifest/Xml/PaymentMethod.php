@@ -2,14 +2,17 @@
 
 namespace Shopware\Core\Framework\App\Manifest\Xml;
 
+use Shopware\Core\Framework\Log\Package;
+
 /**
  * @internal only for use by the app-system
  */
+#[Package('core')]
 class PaymentMethod extends XmlElement
 {
-    public const TRANSLATABLE_FIELDS = ['name', 'description'];
+    final public const TRANSLATABLE_FIELDS = ['name', 'description'];
 
-    public const REQUIRED_FIELDS = [
+    final public const REQUIRED_FIELDS = [
         'identifier',
         'name',
     ];
@@ -17,12 +20,12 @@ class PaymentMethod extends XmlElement
     protected string $identifier;
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     protected array $name = [];
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     protected array $description = [];
 
@@ -33,6 +36,8 @@ class PaymentMethod extends XmlElement
     protected ?string $validateUrl = null;
 
     protected ?string $captureUrl = null;
+
+    protected ?string $refundUrl = null;
 
     protected ?string $icon = null;
 
@@ -69,9 +74,18 @@ class PaymentMethod extends XmlElement
             'finalizeUrl' => $data['finalizeUrl'],
             'validateUrl' => $data['validateUrl'],
             'captureUrl' => $data['captureUrl'],
+            'refundUrl' => $data['refundUrl'],
         ];
 
-        unset($data['identifier'], $data['payUrl'], $data['finalizeUrl'], $data['validateUrl'], $data['captureUrl'], $data['icon']);
+        unset(
+            $data['identifier'],
+            $data['payUrl'],
+            $data['finalizeUrl'],
+            $data['validateUrl'],
+            $data['captureUrl'],
+            $data['refundUrl'],
+            $data['icon']
+        );
 
         return $data;
     }
@@ -82,7 +96,7 @@ class PaymentMethod extends XmlElement
     }
 
     /**
-     * @return string[]
+     * @return array<string>
      */
     public function getName(): array
     {
@@ -90,7 +104,7 @@ class PaymentMethod extends XmlElement
     }
 
     /**
-     * @return string[]
+     * @return array<string>
      */
     public function getDescription(): array
     {
@@ -115,6 +129,11 @@ class PaymentMethod extends XmlElement
     public function getCaptureUrl(): ?string
     {
         return $this->captureUrl;
+    }
+
+    public function getRefundUrl(): ?string
+    {
+        return $this->refundUrl;
     }
 
     public function getIcon(): ?string

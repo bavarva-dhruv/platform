@@ -7,21 +7,26 @@ use Shopware\Core\Checkout\CheckoutRuleScope;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\IsNewsletterRecipientRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class IsNewsletterRecipientRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    private EntityRepositoryInterface $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    private EntityRepositoryInterface $conditionRepository;
+    private EntityRepository $conditionRepository;
 
     private Context $context;
 
@@ -58,9 +63,8 @@ class IsNewsletterRecipientRuleTest extends TestCase
     public function testExistingNewsletterSalesChannelIdMatchesToTrue(): void
     {
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $customer = $this->createMock(CustomerEntity::class);
-        $customer->method('getNewsletterSalesChannelids')
-            ->willReturn([Uuid::randomHex() => 'foo', Uuid::randomHex() => 'bar']);
+        $customer = new CustomerEntity();
+        $customer->setNewsletterSalesChannelIds([Uuid::randomHex() => 'foo', Uuid::randomHex() => 'bar']);
 
         $salesChannelContext->method('getCustomer')
             ->willReturn($customer);
@@ -76,7 +80,7 @@ class IsNewsletterRecipientRuleTest extends TestCase
     public function testEmptyNewsletterSalesChannelIdsMatchesToFalse(): void
     {
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $customer = $this->createMock(CustomerEntity::class);
+        $customer = new CustomerEntity();
 
         $salesChannelContext->method('getCustomer')
             ->willReturn($customer);
@@ -90,9 +94,8 @@ class IsNewsletterRecipientRuleTest extends TestCase
     public function testMissingNewsletterSalesChannelIdMatchesToFalse(): void
     {
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $customer = $this->createMock(CustomerEntity::class);
-        $customer->method('getNewsletterSalesChannelids')
-            ->willReturn([Uuid::randomHex() => 'bar']);
+        $customer = new CustomerEntity();
+        $customer->setNewsletterSalesChannelIds([Uuid::randomHex() => 'bar']);
 
         $salesChannelContext->method('getCustomer')
             ->willReturn($customer);

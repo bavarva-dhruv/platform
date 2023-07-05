@@ -1,7 +1,11 @@
 import template from './sw-cms-el-category-navigation.html.twig';
 import './sw-cms-el-category-navigation.scss';
 
-Shopware.Component.register('sw-cms-el-category-navigation', {
+/**
+ * @private
+ * @package content
+ */
+export default {
     template,
 
     mixins: [
@@ -18,4 +22,4 @@ Shopware.Component.register('sw-cms-el-category-navigation', {
             this.initElementConfig('category-navigation');
         },
     },
-});
+};

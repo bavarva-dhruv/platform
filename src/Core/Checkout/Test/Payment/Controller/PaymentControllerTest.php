@@ -14,9 +14,9 @@ use Shopware\Core\Checkout\Payment\Cart\Token\TokenStruct;
 use Shopware\Core\Checkout\Payment\PaymentService;
 use Shopware\Core\Checkout\Test\Customer\Rule\OrderFixture;
 use Shopware\Core\Checkout\Test\Payment\Handler\V630\AsyncTestPaymentHandler as AsyncTestPaymentHandlerV630;
-use Shopware\Core\Checkout\Test\Payment\JWTFactoryV2Test;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelLifecycleManager;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -24,11 +24,15 @@ use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextService;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
-use Shopware\Core\System\StateMachine\StateMachineRegistry;
+use Shopware\Core\System\StateMachine\Loader\InitialStateIdLoader;
 use Shopware\Core\Test\TestDefaults;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class PaymentControllerTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -36,13 +40,11 @@ class PaymentControllerTest extends TestCase
 
     private JWTFactoryV2 $tokenFactory;
 
-    private EntityRepositoryInterface $orderRepository;
+    private EntityRepository $orderRepository;
 
-    private EntityRepositoryInterface $orderTransactionRepository;
+    private EntityRepository $orderTransactionRepository;
 
-    private EntityRepositoryInterface $paymentMethodRepository;
-
-    private StateMachineRegistry $stateMachineRegistry;
+    private EntityRepository $paymentMethodRepository;
 
     private PaymentService $paymentService;
 
@@ -53,7 +55,6 @@ class PaymentControllerTest extends TestCase
         $this->orderRepository = $this->getContainer()->get('order.repository');
         $this->orderTransactionRepository = $this->getContainer()->get('order_transaction.repository');
         $this->paymentMethodRepository = $this->getContainer()->get('payment_method.repository');
-        $this->stateMachineRegistry = $this->getContainer()->get(StateMachineRegistry::class);
         $this->paymentService = $this->getContainer()->get(PaymentService::class);
     }
 
@@ -64,7 +65,7 @@ class PaymentControllerTest extends TestCase
         $client->request('GET', '/payment/finalize-transaction');
 
         static::assertIsString($client->getResponse()->getContent());
-        $response = json_decode($client->getResponse()->getContent(), true);
+        $response = json_decode($client->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
         static::assertArrayHasKey('errors', $response);
         static::assertSame('FRAMEWORK__MISSING_REQUEST_PARAMETER', $response['errors'][0]['code']);
     }
@@ -76,7 +77,7 @@ class PaymentControllerTest extends TestCase
         $client->request('GET', '/payment/finalize-transaction?_sw_payment_token=abc');
 
         static::assertIsString($client->getResponse()->getContent());
-        $response = json_decode($client->getResponse()->getContent(), true);
+        $response = json_decode($client->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
         static::assertArrayHasKey('errors', $response);
         static::assertSame('CHECKOUT__INVALID_PAYMENT_TOKEN', $response['errors'][0]['code']);
     }
@@ -91,7 +92,7 @@ class PaymentControllerTest extends TestCase
         $client->request('GET', '/payment/finalize-transaction?_sw_payment_token=' . $token);
 
         static::assertIsString($client->getResponse()->getContent());
-        $response = json_decode($client->getResponse()->getContent(), true);
+        $response = json_decode($client->getResponse()->getContent(), true, 512, \JSON_THROW_ON_ERROR);
         static::assertArrayHasKey('errors', $response);
         static::assertSame('CHECKOUT__INVALID_PAYMENT_TOKEN', $response['errors'][0]['code']);
     }
@@ -153,7 +154,7 @@ class PaymentControllerTest extends TestCase
             'id' => $id,
             'orderId' => $orderId,
             'paymentMethodId' => $paymentMethodId,
-            'stateId' => $this->stateMachineRegistry->getInitialState(OrderTransactionStates::STATE_MACHINE, $context)->getId(),
+            'stateId' => $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderTransactionStates::STATE_MACHINE),
             'amount' => new CalculatedPrice(100, 100, new CalculatedTaxCollection(), new TaxRuleCollection(), 1),
             'payload' => '{}',
         ];
@@ -206,10 +207,11 @@ class PaymentControllerTest extends TestCase
         static::assertNotNull($response);
         static::assertEquals(AsyncTestPaymentHandlerV630::REDIRECT_URL, $response->getTargetUrl());
 
-        $transaction = JWTFactoryV2Test::createTransaction();
+        $transaction = new OrderTransactionEntity();
         $transaction->setId($transactionId);
         $transaction->setPaymentMethodId($paymentMethodId);
         $transaction->setOrderId($orderId);
+        $transaction->setStateId(Uuid::randomHex());
 
         return $transaction;
     }

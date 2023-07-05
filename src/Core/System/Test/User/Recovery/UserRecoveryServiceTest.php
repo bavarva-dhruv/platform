@@ -4,8 +4,9 @@ namespace Shopware\Core\System\Test\User\Recovery;
 
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseHelper\CallableClass;
 use Shopware\Core\Framework\Util\Random;
@@ -14,6 +15,10 @@ use Shopware\Core\System\User\Recovery\UserRecoveryRequestEvent;
 use Shopware\Core\System\User\Recovery\UserRecoveryService;
 use Shopware\Core\System\User\UserEntity;
 
+/**
+ * @internal
+ */
+#[Package('system-settings')]
 class UserRecoveryServiceTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -22,9 +27,9 @@ class UserRecoveryServiceTest extends TestCase
 
     private UserRecoveryService $userRecoveryService;
 
-    private EntityRepositoryInterface $userRecoveryRepo;
+    private EntityRepository $userRecoveryRepo;
 
-    private EntityRepositoryInterface $userRepo;
+    private EntityRepository $userRepo;
 
     private Context $context;
 
@@ -76,7 +81,7 @@ class UserRecoveryServiceTest extends TestCase
         static::assertSame($expectedResult, $this->userRecoveryService->checkHash($hash, $this->context));
     }
 
-    public function dataProviderTestCheckHash(): array
+    public static function dataProviderTestCheckHash(): array
     {
         return [
             [
@@ -169,6 +174,9 @@ class UserRecoveryServiceTest extends TestCase
     }
 }
 
+/**
+ * @internal
+ */
 class RuleValidator extends CallableClass
 {
     /**

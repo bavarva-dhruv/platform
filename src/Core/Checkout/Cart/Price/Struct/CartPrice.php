@@ -4,14 +4,17 @@ namespace Shopware\Core\Checkout\Cart\Price\Struct;
 
 use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTaxCollection;
 use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\Struct;
 use Shopware\Core\Framework\Util\FloatComparator;
 
+#[Package('checkout')]
 class CartPrice extends Struct
 {
-    public const TAX_STATE_GROSS = 'gross';
-    public const TAX_STATE_NET = 'net';
-    public const TAX_STATE_FREE = 'tax-free';
+    final public const TAX_STATE_GROSS = 'gross';
+    final public const TAX_STATE_NET = 'net';
+    final public const TAX_STATE_FREE = 'tax-free';
+    final public const TAX_STATE_EXTERNAL = 'external';
 
     /**
      * @var float
@@ -61,25 +64,30 @@ class CartPrice extends Struct
         $this->totalPrice = FloatComparator::cast($totalPrice);
         $this->calculatedTaxes = $calculatedTaxes;
         $this->taxRules = $taxRules;
-        $this->positionPrice = $positionPrice;
+        $this->positionPrice = FloatComparator::cast($positionPrice);
         $this->taxStatus = $taxStatus;
-        $rawTotal = $rawTotal ?? $totalPrice;
-        $this->rawTotal = $rawTotal;
+        $rawTotal ??= $totalPrice;
+        $this->rawTotal = FloatComparator::cast($rawTotal);
     }
 
     public function getNetPrice(): float
     {
-        return FloatComparator::cast($this->netPrice);
+        return $this->netPrice;
     }
 
     public function getTotalPrice(): float
     {
-        return FloatComparator::cast($this->totalPrice);
+        return $this->totalPrice;
     }
 
     public function getCalculatedTaxes(): CalculatedTaxCollection
     {
         return $this->calculatedTaxes;
+    }
+
+    public function setCalculatedTaxes(CalculatedTaxCollection $calculatedTaxes): void
+    {
+        $this->calculatedTaxes = $calculatedTaxes;
     }
 
     public function getTaxRules(): TaxRuleCollection

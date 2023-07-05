@@ -1,8 +1,12 @@
 import template from './sw-cms-el-manufacturer-logo.html.twig';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 
-Component.extend('sw-cms-el-manufacturer-logo', 'sw-cms-el-image', {
+/**
+ * @private
+ * @package content
+ */
+export default {
     template,
     mixins: [
         Mixin.getByName('cms-element'),
@@ -38,4 +42,4 @@ Component.extend('sw-cms-el-manufacturer-logo', 'sw-cms-el-image', {
             }
         },
     },
-});
+};

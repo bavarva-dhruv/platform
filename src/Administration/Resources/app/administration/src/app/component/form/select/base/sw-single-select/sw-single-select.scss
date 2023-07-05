@@ -12,6 +12,11 @@
             display: block;
             padding: 12px 8px;
         }
+
+        &:disabled {
+            background-color: $color-white;
+            border-color: $color-white;
+        }
     }
 
     .sw-single-select__selection-text {
@@ -25,19 +30,19 @@
 
     &.sw-field--medium {
         .sw-select__selection {
-            padding: 0 6px 0;
+            padding: 0 6px;
         }
 
         .sw-single-select__selection-input,
         .sw-single-select__selection-text {
-            padding: 8px 8px;
+            padding: 8px;
             min-height: 22px + 2 * 8px;
         }
     }
 
     &.sw-field--small {
         .sw-select__selection {
-            padding: 0 6px 0;
+            padding: 0 6px;
         }
 
         .sw-single-select__selection-input,

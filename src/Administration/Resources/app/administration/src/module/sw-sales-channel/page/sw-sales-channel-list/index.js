@@ -1,10 +1,15 @@
+/**
+ * @package sales-channel
+ */
+
 import template from './sw-sales-channel-list.html.twig';
 import './sw-sales-channel-list.scss';
 
-const { Component, Mixin, Defaults } = Shopware;
+const { Mixin, Defaults } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-sales-channel-list', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory', 'acl', 'domainLinkService'],
@@ -122,6 +127,10 @@ Component.register('sw-sales-channel-list', {
                 return false;
             }
 
+            if (this.freshSearchTerm) {
+                criteria.resetSorting();
+            }
+
             return this.salesChannelRepository.search(criteria)
                 .then(searchResult => {
                     this.salesChannels = searchResult;
@@ -166,4 +175,4 @@ Component.register('sw-sales-channel-list', {
             return salesChannel.type.id === Defaults.storefrontSalesChannelTypeId;
         },
     },
-});
+};

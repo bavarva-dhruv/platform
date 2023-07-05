@@ -2,69 +2,40 @@
 
 namespace Shopware\Core\Content\Seo;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Seo\SeoUrlRoute\SeoUrlRouteRegistry;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\Feature;
-use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\Language\LanguageEntity;
+use Shopware\Core\System\SalesChannel\SalesChannelCollection;
 
 /**
  * This class can be used to regenerate the seo urls for a route and an offset at ids.
  */
+#[Package('sales-channel')]
 class SeoUrlUpdater
 {
     /**
-     * @var EntityRepositoryInterface
+     * @internal
      */
-    private $languageRepository;
-
-    /**
-     * @var SeoUrlRouteRegistry
-     */
-    private $seoUrlRouteRegistry;
-
-    /**
-     * @var SeoUrlGenerator
-     */
-    private $seoUrlGenerator;
-
-    /**
-     * @var SeoUrlPersister
-     */
-    private $seoUrlPersister;
-
-    /**
-     * @var Connection
-     */
-    private $connection;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $salesChannelRepository;
-
     public function __construct(
-        EntityRepositoryInterface $languageRepository,
-        SeoUrlRouteRegistry $seoUrlRouteRegistry,
-        SeoUrlGenerator $seoUrlGenerator,
-        SeoUrlPersister $seoUrlPersister,
-        Connection $connection,
-        EntityRepositoryInterface $salesChannelRepository
+        private readonly EntityRepository $languageRepository,
+        private readonly SeoUrlRouteRegistry $seoUrlRouteRegistry,
+        private readonly SeoUrlGenerator $seoUrlGenerator,
+        private readonly SeoUrlPersister $seoUrlPersister,
+        private readonly Connection $connection,
+        private readonly EntityRepository $salesChannelRepository
     ) {
-        $this->languageRepository = $languageRepository;
-        $this->seoUrlRouteRegistry = $seoUrlRouteRegistry;
-        $this->seoUrlGenerator = $seoUrlGenerator;
-        $this->seoUrlPersister = $seoUrlPersister;
-        $this->connection = $connection;
-        $this->salesChannelRepository = $salesChannelRepository;
     }
 
+    /**
+     * @param list<string> $ids
+     */
     public function update(string $routeName, array $ids): void
     {
         $templates = $this->loadTemplates([$routeName]);
@@ -73,9 +44,10 @@ class SeoUrlUpdater
         }
 
         $context = Context::createDefaultContext();
-        $languages = $this->languageRepository->search(new Criteria(), $context);
+        /** @var list<LanguageEntity> $languages */
+        $languages = $this->languageRepository->search(new Criteria(), $context)->getEntities()->getElements();
 
-        $languageChains = $this->fetchLanguageChains($languages->getEntities()->getElements());
+        $languageChains = $this->fetchLanguageChains($languages);
 
         $salesChannels = $this->fetchSalesChannels();
 
@@ -99,7 +71,7 @@ class SeoUrlUpdater
 
             $salesChannel = $salesChannels->get($salesChannelId);
 
-            if ($salesChannel === null && Feature::isActive('FEATURE_NEXT_13410')) {
+            if ($salesChannel === null) {
                 continue;
             }
 
@@ -111,6 +83,11 @@ class SeoUrlUpdater
         }
     }
 
+    /**
+     * @param list<string> $routes
+     *
+     * @return list<array{salesChannelId: string, languageId: string, route: string, template: string|null}>
+     */
     private function loadTemplates(array $routes): array
     {
         $domains = $this->connection->fetchAllAssociative(
@@ -132,7 +109,7 @@ class SeoUrlUpdater
              FROM seo_url_template
              WHERE route_name IN (:routes)',
             ['routes' => $routes],
-            ['routes' => Connection::PARAM_STR_ARRAY]
+            ['routes' => ArrayParameterType::STRING]
         );
 
         if ($modified === []) {
@@ -171,41 +148,33 @@ class SeoUrlUpdater
         return $result;
     }
 
-    private function fetchSalesChannels(): EntityCollection
+    private function fetchSalesChannels(): SalesChannelCollection
     {
         $context = Context::createDefaultContext();
 
-        return $this->salesChannelRepository->search(new Criteria(), $context)->getEntities();
+        /** @var SalesChannelCollection $entities */
+        $entities = $this->salesChannelRepository->search(new Criteria(), $context)->getEntities();
+
+        return $entities;
     }
 
+    /**
+     * @param list<LanguageEntity> $languages
+     *
+     * @return array<string, list<string>>
+     */
     private function fetchLanguageChains(array $languages): array
     {
         $languageChains = [];
-        /** @var LanguageEntity $language */
         foreach ($languages as $language) {
             $languageId = $language->getId();
-            $languageChains[$languageId] = $this->getLanguageIdChain($languageId);
+            $languageChains[$languageId] = array_filter([
+                $languageId,
+                $language->getParentId(),
+                Defaults::LANGUAGE_SYSTEM,
+            ]);
         }
 
         return $languageChains;
-    }
-
-    private function getLanguageIdChain(string $languageId): array
-    {
-        return [
-            $languageId,
-            $this->getParentLanguageId($languageId),
-            Defaults::LANGUAGE_SYSTEM,
-        ];
-    }
-
-    private function getParentLanguageId(string $languageId): ?string
-    {
-        // TODO: optimize to one query
-        $result = $this->connection
-            ->executeQuery('SELECT LOWER(HEX(parent_id)) FROM language WHERE id = :id', ['id' => Uuid::fromHexToBytes($languageId)])
-            ->fetchColumn();
-
-        return $result ? (string) $result : null;
     }
 }

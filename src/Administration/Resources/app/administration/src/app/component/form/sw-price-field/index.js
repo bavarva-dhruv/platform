@@ -2,8 +2,12 @@ import template from './sw-price-field.html.twig';
 import './sw-price-field.scss';
 
 const { Component, Application } = Shopware;
+const { debounce } = Shopware.Utils;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @status ready
  * @example-type static
@@ -175,9 +179,9 @@ Component.register('sw-price-field', {
                 if (this.isInherited) {
                     return {
                         currencyId: this.currency.id,
-                        gross: this.defaultPrice.gross ? this.convertPrice(this.defaultPrice.gross) : null,
+                        gross: Number.isNaN(this.defaultPrice.gross) ? null : this.convertPrice(this.defaultPrice.gross),
                         linked: this.defaultPrice.linked,
-                        net: this.defaultPrice.net ? this.convertPrice(this.defaultPrice.net) : null,
+                        net: Number.isNaN(this.defaultPrice.net) ? null : this.convertPrice(this.defaultPrice.net),
                     };
                 }
 
@@ -262,6 +266,30 @@ Component.register('sw-price-field', {
             this.$emit('change', this.priceForCurrency);
         },
 
+        onPriceGrossInputChange(value) {
+            if (this.priceForCurrency.linked) {
+                this.priceForCurrency.gross = value;
+
+                this.onPriceGrossChangeDebounce(value);
+            }
+        },
+
+        onPriceNetInputChange(value) {
+            if (this.priceForCurrency.linked) {
+                this.priceForCurrency.net = value;
+
+                this.onPriceNetChangeDebounce(value);
+            }
+        },
+
+        onPriceGrossChangeDebounce: debounce(function onPriceGrossChangeDebounce() {
+            this.onPriceGrossChange(this.priceForCurrency.gross);
+        }, 300),
+
+        onPriceNetChangeDebounce: debounce(function onPriceNetChangeDebounce() {
+            this.onPriceNetChange(this.priceForCurrency.net);
+        }, 300),
+
         onPriceGrossChange(value) {
             if (this.priceForCurrency.linked) {
                 this.$emit('price-calculate', true);
@@ -283,7 +311,7 @@ Component.register('sw-price-field', {
         },
 
         convertNetToGross(value) {
-            if (Number.isNaN(value)) {
+            if (Number.isNaN(value) || value === null) {
                 this.priceForCurrency.gross = this.allowEmpty ? null : 0;
                 return false;
             }
@@ -302,7 +330,7 @@ Component.register('sw-price-field', {
         },
 
         convertGrossToNet(value) {
-            if (Number.isNaN(value)) {
+            if (Number.isNaN(value) || value === null) {
                 this.priceForCurrency.net = this.allowEmpty ? null : 0;
                 this.$emit('calculating', false);
                 return false;
@@ -331,13 +359,13 @@ Component.register('sw-price-field', {
                     !this.priceForCurrency[outputType] ||
                     !outputType
                 ) {
-                    return null;
+                    return;
                 }
 
                 if (!this.taxRate.id) {
                     resolve(0);
                     this.$emit('price-calculate', false);
-                    return true;
+                    return;
                 }
 
                 this.calculatePriceApiService.calculatePrice({
@@ -355,7 +383,6 @@ Component.register('sw-price-field', {
                     resolve(tax);
                     this.$emit('price-calculate', false);
                 });
-                return true;
             });
         },
 

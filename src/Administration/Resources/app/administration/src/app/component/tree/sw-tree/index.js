@@ -5,6 +5,9 @@ const { Component } = Shopware;
 const { debounce, sort } = Shopware.Utils;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @status ready
  * @example-type static
@@ -27,7 +30,7 @@ const { debounce, sort } = Shopware.Utils;
  *         { id: 4, name: 'Example #4', childCount: 0, parentId: null, afterId: 3 },
  *         { id: 5, name: 'Example #5', childCount: 0, parentId: null, afterId: 4 },
  *     ]">
- *     <template slot="items" slot-scope="{ treeItems, sortable, draggedItem, disableContextMenu, onChangeRoute }">
+ *     <template #items="{ treeItems, sortable, draggedItem, disableContextMenu, onChangeRoute }">
  *         <sw-tree-item
  *             v-for="(item, index) in treeItems"
  *             :key="item.id"
@@ -39,6 +42,7 @@ const { debounce, sort } = Shopware.Utils;
  *     </template>
  * </sw-tree>
  */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
 Component.register('sw-tree', {
     template,
 
@@ -198,8 +202,6 @@ Component.register('sw-tree', {
             treeItems: [],
             draggedItem: null,
             currentTreeSearch: null,
-            // @deprecated tag:v6.5.0 - Will be removed
-            isLoading: false,
             newElementId: null,
             contextItem: null,
             currentEditMode: null,
@@ -384,10 +386,10 @@ Component.register('sw-tree', {
                 this.draggedItem.data.parentId = this.droppedItem.data.parentId;
             }
 
-            const tree = this.findTreeByParentId(this.draggedItem.parentId);
+            const tree = this.findTreeByParentId(oldParentId);
             this.updateSorting(tree);
 
-            if (this.draggedItem.parentId !== this.droppedItem.parentId) {
+            if (oldParentId !== this.droppedItem.parentId) {
                 const dropTree = this.findTreeByParentId(this.droppedItem.parentId);
                 this.updateSorting(dropTree);
             }
@@ -403,6 +405,8 @@ Component.register('sw-tree', {
             // reset event items
             this.draggedItem = null;
             this.droppedItem = null;
+
+            this.isLoading = true;
 
             this.$emit('drag-end', eventData);
         },
@@ -428,14 +432,13 @@ Component.register('sw-tree', {
 
             droppedComponent = targetTree[dropItemIdx];
 
-            if (!this.bindItemsToFolder && draggedComponent.parentId !== droppedComponent.parentId) {
+            if (!this.bindItemsToFolder || draggedComponent.parentId === droppedComponent.parentId) {
                 sourceTree.splice(dragItemIdx, 1);
-                targetTree.splice(dropItemIdx, 1, draggedComponent);
-                targetTree.splice(dropItemIdx + 1, 0, droppedComponent);
-                draggedComponent.parentId = droppedComponent.parentId;
-            } else if (draggedComponent.parentId === droppedComponent.parentId) {
-                targetTree.splice(dropItemIdx, 1, draggedComponent);
-                sourceTree.splice(dragItemIdx, 1, droppedComponent);
+                targetTree.splice(dropItemIdx, 0, draggedComponent);
+
+                if (draggedComponent.parentId !== droppedComponent.parentId) {
+                    draggedComponent.parentId = droppedComponent.parentId;
+                }
             }
 
             this.droppedItem = droppedComponent;
@@ -525,6 +528,7 @@ Component.register('sw-tree', {
                 const newElem = this.$parent.createNewElement(contextItem, contextItem.id);
                 const newTreeItem = this.getNewTreeItem(newElem);
 
+                parentElement.childCount += 1;
                 parentElement.data.childCount += 1;
                 this.newElementId = newElem.id;
                 this.createdItem = newTreeItem;
@@ -614,6 +618,7 @@ Component.register('sw-tree', {
 
                 const parent = this.findById(item.parentId);
                 if (parent.id === item.parentId && parent.data) {
+                    parent.childCount -= 1;
                     parent.data.childCount -= 1;
                 }
             }

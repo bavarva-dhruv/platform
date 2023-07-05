@@ -1,7 +1,9 @@
 import template from './sw-first-run-wizard-paypal-base.html.twig';
 
-const { Component } = Shopware;
-
-Component.register('sw-first-run-wizard-paypal-base', {
+/**
+ * @package merchant-services
+ */
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
-});
+};

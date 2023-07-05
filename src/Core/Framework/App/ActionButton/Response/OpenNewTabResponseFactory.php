@@ -6,17 +6,16 @@ use Shopware\Core\Framework\App\ActionButton\AppAction;
 use Shopware\Core\Framework\App\Exception\ActionProcessException;
 use Shopware\Core\Framework\App\Hmac\QuerySigner;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\Log\Package;
 
 /**
  * @internal only for use by the app-system
  */
+#[Package('core')]
 class OpenNewTabResponseFactory implements ActionButtonResponseFactoryInterface
 {
-    private QuerySigner $signer;
-
-    public function __construct(QuerySigner $signer)
+    public function __construct(private readonly QuerySigner $signer)
     {
-        $this->signer = $signer;
     }
 
     public function supports(string $actionType): bool
@@ -28,7 +27,11 @@ class OpenNewTabResponseFactory implements ActionButtonResponseFactoryInterface
     {
         $this->validate($payload, $action->getActionId());
 
-        $payload['redirectUrl'] = (string) $this->signer->signUri($payload['redirectUrl'], $action->getAppSecret(), $context);
+        $appSecret = $action->getAppSecret();
+        if ($appSecret) {
+            $payload['redirectUrl'] = (string) $this->signer->signUri($payload['redirectUrl'], $appSecret, $context);
+        }
+
         $response = new OpenNewTabResponse();
         $response->assign($payload);
 

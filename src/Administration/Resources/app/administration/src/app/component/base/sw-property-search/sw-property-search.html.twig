@@ -1,11 +1,14 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_property_search %}
 <div
     class="sw-property-search"
     :class="swPropertySearchClasses"
 >
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_property_search_inner_before %}{% endblock %}
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_property_search_field %}
     <div class="sw-property-search__toolbar">
         <slot
@@ -29,24 +32,28 @@
             </div>
 
             <slot name="toolbar-items">
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_property_toolbar_items %}{% endblock %}
             </slot>
         </slot>
     </div>
     {% endblock %}
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_property_search_tree %}
     <div
         v-if="displayTree"
         class="sw-property-search__tree-selection"
     >
 
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_property_search_tree_container %}
         <sw-container
             columns="50% 50%"
             class="sw-property-search__tree-selection-container"
         >
 
+            <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
             {% block sw_property_search_tree_group_grid %}
             <sw-grid
                 ref="groupGrid"
@@ -60,12 +67,13 @@
                 table
             >
 
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_property_search_tree_group_grid_columns %}
                 <template
-                    slot="columns"
-                    slot-scope="{ item }"
+                    #columns="{ item }"
                 >
 
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                     {% block sw_property_search_tree_group_grid_columns_name %}
                     <sw-grid-column
                         truncate
@@ -75,7 +83,7 @@
                         @click="selectGroup(item)"
                     >
                         <sw-icon
-                            name="multicolor-folder-breadcrumbs"
+                            name="regular-folder"
                             size="16px"
                             multicolor
                         />
@@ -83,6 +91,7 @@
                     </sw-grid-column>
                     {% endblock %}
 
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                     {% block sw_property_search_tree_group_grid_columns_options %}
                     <sw-grid-column
                         truncate
@@ -97,7 +106,8 @@
                 </template>
                 {% endblock %}
 
-                <template slot="pagination">
+                <template #pagination>
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                     {% block sw_property_search_tree_group_grid_pagination %}
                     <sw-pagination
                         :page="groupPage"
@@ -113,6 +123,7 @@
             </sw-grid>
             {% endblock %}
 
+            <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
             {% block sw_property_search_tree_option_grid %}
             <sw-grid
                 ref="optionGrid"
@@ -125,12 +136,13 @@
                 @sw-grid-select-item="onOptionSelect"
             >
 
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_property_search_tree_option_grid_columns %}
                 <template
-                    slot="columns"
-                    slot-scope="{ item }"
+                    #columns="{ item }"
                 >
 
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                     {% block sw_property_search_tree_option_grid_columns_name %}
                     <sw-grid-column
                         class="sw-property-search__tree-selection__option_grid--option-value"
@@ -145,7 +157,8 @@
                 </template>
                 {% endblock %}
 
-                <template slot="pagination">
+                <template #pagination>
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                     {% block sw_property_search_tree_option_grid_pagination %}
                     <sw-pagination
                         :page="optionPage"
@@ -166,11 +179,13 @@
     </div>
     {% endblock %}
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_property_search_option_search %}
     <div
         v-if="displaySearch"
         class="sw-property-search__search-selection"
     >
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_property_search_option_search_grid %}
         <sw-grid
             v-if="groupOptions.length > 0"
@@ -184,11 +199,12 @@
             @sw-grid-select-item="onOptionSelect"
         >
 
+            <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
             {% block sw_property_search_option_search_grid_columns %}
             <template
-                slot="columns"
-                slot-scope="{ item }"
+                #columns="{ item }"
             >
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_property_search_option_search_grid_columns_name %}
                 <sw-grid-column
                     flex="300px"
@@ -200,7 +216,8 @@
             </template>
             {% endblock %}
 
-            <template slot="pagination">
+            <template #pagination>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_property_search_option_search_grid_pagination %}
                 <sw-pagination
                     :page="optionPage"
@@ -214,6 +231,7 @@
             </template>
         </sw-grid>
         {% endblock %}
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_property_search_empty %}
         <sw-empty-state
             v-else
@@ -222,6 +240,7 @@
             :subline="$tc('sw-property-search.noPropertiesFoundDescription')"
         >
             <template #icon>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block sw_property_search_empty_image %}
                 <img
                     :src="'/administration/static/img/empty-states/products-empty-state.svg' | asset"
@@ -234,6 +253,7 @@
     </div>
     {% endblock %}
 
+    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
     {% block sw_property_search_inner_after %}{% endblock %}
 
 </div>

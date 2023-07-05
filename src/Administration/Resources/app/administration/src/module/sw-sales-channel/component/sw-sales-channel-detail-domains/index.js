@@ -1,11 +1,16 @@
+/**
+ * @package sales-channel
+ */
+
 import template from './sw-sales-channel-detail-domains.html.twig';
 import './sw-sales-channel-detail-domains.scss';
 
-const { Component, Context } = Shopware;
+const { Context } = Shopware;
 const { Criteria } = Shopware.Data;
 const { ShopwareError } = Shopware.Classes;
 
-Component.register('sw-sales-channel-detail-domains', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -72,12 +77,12 @@ Component.register('sw-sales-channel-detail-domains', {
         },
 
         snippetSetCriteria() {
-            return (new Criteria())
+            return (new Criteria(1, 25))
                 .addSorting(Criteria.sort('name', 'ASC'));
         },
 
         salesChannelFilterCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
 
             criteria
                 .addAssociation('salesChannels')
@@ -87,7 +92,7 @@ Component.register('sw-sales-channel-detail-domains', {
         },
 
         currencyCriteria() {
-            return (new Criteria())
+            return (new Criteria(1, 25))
                 .addSorting(Criteria.sort('name', 'ASC'));
         },
 
@@ -183,7 +188,7 @@ Component.register('sw-sales-channel-detail-domains', {
 
         async domainExistsInDatabase(url) {
             const globalDomainRepository = this.repositoryFactory.create(this.salesChannel.domains.entity);
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.addFilter(Criteria.equals('url', url));
 
             const items = await globalDomainRepository.search(criteria);
@@ -220,9 +225,34 @@ Component.register('sw-sales-channel-detail-domains', {
             this.currentDomain.snippetSetId = this.currentDomainBackup.snippetSetId;
         },
 
+        setInitialCurrency(domain) {
+            const currency = this.salesChannel.currencies.first();
+            domain.currency = currency;
+            domain.currencyId = currency.id;
+            this.currentDomain = domain;
+        },
+
+        setInitialLanguage(domain) {
+            const language = this.salesChannel.languages.first();
+            domain.language = language;
+            domain.languageId = language.id;
+            this.currentDomain = domain;
+        },
+
         onClickOpenCreateDomainModal() {
-            this.currentDomain = this.domainRepository.create(Context.api);
-            this.setCurrentDomainBackup(this.currentDomain);
+            const domain = this.domainRepository.create(Context.api);
+
+            this.setCurrentDomainBackup(domain);
+
+            if (this.salesChannel.currencies.length === 1) {
+                this.setInitialCurrency(domain);
+            }
+
+            if (this.salesChannel.languages.length === 1) {
+                this.setInitialLanguage(domain);
+            }
+
+            this.currentDomain = domain;
         },
 
         async onClickAddNewDomain() {
@@ -317,4 +347,4 @@ Component.register('sw-sales-channel-detail-domains', {
             }];
         },
     },
-});
+};

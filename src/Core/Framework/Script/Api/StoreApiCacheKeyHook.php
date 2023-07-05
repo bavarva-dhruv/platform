@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Framework\Script\Api;
 
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Script\Execution\Awareness\SalesChannelContextAware;
 use Shopware\Core\Framework\Script\Execution\Awareness\StoppableHook;
 use Shopware\Core\Framework\Script\Execution\Awareness\StoppableHookTrait;
-use Shopware\Core\Framework\Script\Execution\FunctionHook;
 use Shopware\Core\Framework\Script\Execution\OptionalFunctionHook;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
@@ -16,38 +16,44 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
  * @hook-use-case custom_endpoint
  *
  * @since 6.4.9.0
+ *
+ * @final
  */
-class StoreApiCacheKeyHook extends FunctionHook implements SalesChannelContextAware, StoppableHook, OptionalFunctionHook
+#[Package('core')]
+class StoreApiCacheKeyHook extends OptionalFunctionHook implements SalesChannelContextAware, StoppableHook
 {
     use StoppableHookTrait;
 
-    public const FUNCTION_NAME = 'cache_key';
+    final public const FUNCTION_NAME = 'cache_key';
 
-    private array $request;
+    private ?string $cacheKey = null;
 
-    private array $query;
-
-    private SalesChannelContext $salesChannelContext;
-
-    private string $name;
-
-    private ?string $cacheKey;
-
-    public function __construct(string $name, array $request, array $query, SalesChannelContext $salesChannelContext)
-    {
-        $this->request = $request;
-        $this->query = $query;
-        $this->salesChannelContext = $salesChannelContext;
-
+    public function __construct(
+        private readonly string $name,
+        /**
+         * @var array<string, mixed>
+         */
+        private readonly array $request,
+        /**
+         * @var array<string, mixed>
+         */
+        private readonly array $query,
+        private readonly SalesChannelContext $salesChannelContext
+    ) {
         parent::__construct($salesChannelContext->getContext());
-        $this->name = $name;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getRequest(): array
     {
         return $this->request;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getQuery(): array
     {
         return $this->query;

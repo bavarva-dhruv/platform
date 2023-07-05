@@ -1,11 +1,11 @@
 import template from './sw-promotion-v2-individual-codes-behavior.html.twig';
 import './sw-promotion-v2-individual-codes-behavior.scss';
 
-const { Component } = Shopware;
 const { Criteria } = Shopware.Data;
 const createId = Shopware.Utils.createId;
 
-Component.register('sw-promotion-v2-individual-codes-behavior', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -216,4 +216,4 @@ Component.register('sw-promotion-v2-individual-codes-behavior', {
             });
         },
     },
-});
+};

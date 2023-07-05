@@ -1,11 +1,12 @@
 import template from './sw-promotion-v2-detail.html.twig';
 import errorConfig from './error-config.json';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 const { Criteria } = Shopware.Data;
 const { mapPageErrors } = Shopware.Component.getComponentHelper();
 
-Component.register('sw-promotion-v2-detail', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -128,9 +129,19 @@ Component.register('sw-promotion-v2-detail', {
 
     methods: {
         createdComponent() {
+            Shopware.ExtensionAPI.publishData({
+                id: 'sw-promotion-detail__promotion',
+                path: 'promotion',
+                scope: this,
+            });
             this.isLoading = true;
 
             if (!this.promotionId) {
+                // set language to system language
+                if (!Shopware.State.getters['context/isSystemDefaultLanguage']) {
+                    Shopware.State.commit('context/resetLanguageToDefault');
+                }
+
                 this.promotion = this.promotionRepository.create();
                 this.isLoading = false;
 
@@ -222,11 +233,13 @@ Component.register('sw-promotion-v2-detail', {
 
             return this.promotionRepository.save(this.promotion)
                 .then(() => {
+                    this.loadEntityData();
                     return this.savePromotionSetGroups();
                 })
                 .then(() => {
                     Shopware.State.commit('swPromotionDetail/setSetGroupIdsDelete', []);
                     this.isSaveSuccessful = true;
+                    this.loadEntityData();
                 })
                 .catch(() => {
                     this.isLoading = false;
@@ -237,7 +250,6 @@ Component.register('sw-promotion-v2-detail', {
                     });
                 })
                 .finally(() => {
-                    this.loadEntityData();
                     this.cleanUpCodes(false, false);
                 });
         },
@@ -281,4 +293,4 @@ Component.register('sw-promotion-v2-detail', {
             this.savePromotion();
         },
     },
-});
+};

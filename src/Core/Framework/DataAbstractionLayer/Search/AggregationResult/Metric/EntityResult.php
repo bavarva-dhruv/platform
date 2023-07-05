@@ -5,20 +5,25 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\AggregationResult;
+use Shopware\Core\Framework\Log\Package;
 
+/**
+ * @final
+ */
+#[Package('core')]
 class EntityResult extends AggregationResult
 {
     /**
-     * @var EntityCollection
+     * @param EntityCollection<Entity> $entities
      */
-    protected $entities;
-
-    public function __construct(string $name, EntityCollection $entities)
+    public function __construct(string $name, protected EntityCollection $entities)
     {
         parent::__construct($name);
-        $this->entities = $entities;
     }
 
+    /**
+     * @return EntityCollection<Entity>
+     */
     public function getEntities(): EntityCollection
     {
         return $this->entities;

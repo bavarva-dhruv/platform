@@ -2,11 +2,12 @@
 
 namespace Shopware\Core\Content\Rule;
 
+use Shopware\Core\Content\Rule\Aggregate\RuleCondition\RuleConditionCollection;
 use Shopware\Core\Content\Rule\Aggregate\RuleCondition\RuleConditionDefinition;
 use Shopware\Core\Content\Rule\Aggregate\RuleCondition\RuleConditionEntity;
+use Shopware\Core\Framework\App\Aggregate\AppScriptCondition\AppScriptConditionEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\UnsupportedCommandTypeException;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
@@ -15,41 +16,34 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Collector\RuleConditionRegistry;
 use Shopware\Core\Framework\Rule\Exception\InvalidConditionException;
+use Shopware\Core\Framework\Rule\ScriptRule;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationInterface;
 use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class RuleValidator implements EventSubscriberInterface
 {
     /**
-     * @var ValidatorInterface
+     * @internal
      */
-    private $validator;
-
-    /**
-     * @var RuleConditionRegistry
-     */
-    private $ruleConditionRegistry;
-
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $ruleConditionRepository;
-
     public function __construct(
-        ValidatorInterface $validator,
-        RuleConditionRegistry $ruleConditionRegistry,
-        EntityRepositoryInterface $ruleConditionRepository
+        private readonly ValidatorInterface $validator,
+        private readonly RuleConditionRegistry $ruleConditionRegistry,
+        private readonly EntityRepository $ruleConditionRepository,
+        private readonly EntityRepository $appScriptConditionRepository
     ) {
-        $this->validator = $validator;
-        $this->ruleConditionRegistry = $ruleConditionRegistry;
-        $this->ruleConditionRepository = $ruleConditionRepository;
     }
 
     public static function getSubscribedEvents(): array
@@ -78,7 +72,7 @@ class RuleValidator implements EventSubscriberInterface
             }
 
             if ($command instanceof InsertCommand) {
-                $this->validateCondition(null, $command, $writeException);
+                $this->validateCondition(null, $command, $writeException, $event->getContext());
 
                 continue;
             }
@@ -100,29 +94,20 @@ class RuleValidator implements EventSubscriberInterface
     private function validateCondition(
         ?RuleConditionEntity $condition,
         WriteCommand $command,
-        WriteException $writeException
+        WriteException $writeException,
+        Context $context
     ): void {
         $payload = $command->getPayload();
         $violationList = new ConstraintViolationList();
 
         $type = $this->getConditionType($condition, $payload);
         if ($type === null) {
-            $violation = $this->buildViolation(
-                'Your condition is missing a type.',
-                [],
-                '/type',
-                'CONTENT__MISSING_RULE_TYPE_EXCEPTION'
-            );
-
-            $violationList->add($violation);
-            $writeException->add(new WriteConstraintViolationException($violationList, $command->getPath()));
-
             return;
         }
 
         try {
             $ruleInstance = $this->ruleConditionRegistry->getRuleInstance($type);
-        } catch (InvalidConditionException $e) {
+        } catch (InvalidConditionException) {
             $violation = $this->buildViolation(
                 'This {{ value }} is not a valid condition type.',
                 ['{{ value }}' => $type],
@@ -138,6 +123,10 @@ class RuleValidator implements EventSubscriberInterface
         $value = $this->getConditionValue($condition, $payload);
         $ruleInstance->assign($value);
 
+        if ($ruleInstance instanceof ScriptRule) {
+            $this->setScriptConstraints($ruleInstance, $condition, $payload, $context);
+        }
+
         $this->validateConsistence(
             $ruleInstance->getConstraints(),
             $value,
@@ -149,6 +138,9 @@ class RuleValidator implements EventSubscriberInterface
         }
     }
 
+    /**
+     * @param array<mixed> $payload
+     */
     private function getConditionType(?RuleConditionEntity $condition, array $payload): ?string
     {
         $type = $condition !== null ? $condition->getType() : null;
@@ -159,16 +151,25 @@ class RuleValidator implements EventSubscriberInterface
         return $type;
     }
 
+    /**
+     * @param array<mixed> $payload
+     *
+     * @return array<mixed>
+     */
     private function getConditionValue(?RuleConditionEntity $condition, array $payload): array
     {
         $value = $condition !== null ? $condition->getValue() : [];
         if (isset($payload['value']) && $payload['value'] !== null) {
-            $value = json_decode($payload['value'], true);
+            $value = json_decode((string) $payload['value'], true, 512, \JSON_THROW_ON_ERROR);
         }
 
         return $value ?? [];
     }
 
+    /**
+     * @param array<string, array<Constraint>> $fieldValidations
+     * @param array<mixed> $payload
+     */
     private function validateConsistence(array $fieldValidations, array $payload, ConstraintViolationList $violationList): void
     {
         foreach ($fieldValidations as $fieldName => $validations) {
@@ -193,6 +194,9 @@ class RuleValidator implements EventSubscriberInterface
         }
     }
 
+    /**
+     * @param array<UpdateCommand> $commandQueue
+     */
     private function validateUpdateCommands(
         array $commandQueue,
         WriteException $writeException,
@@ -204,11 +208,14 @@ class RuleValidator implements EventSubscriberInterface
             $id = Uuid::fromBytesToHex($command->getPrimaryKey()['id']);
             $condition = $conditions->get($id);
 
-            $this->validateCondition($condition, $command, $writeException);
+            $this->validateCondition($condition, $command, $writeException, $context);
         }
     }
 
-    private function getSavedConditions(array $commandQueue, Context $context): EntityCollection
+    /**
+     * @param array<UpdateCommand> $commandQueue
+     */
+    private function getSavedConditions(array $commandQueue, Context $context): RuleConditionCollection
     {
         $ids = array_map(function ($command) {
             $uuidBytes = $command->getPrimaryKey()['id'];
@@ -219,9 +226,15 @@ class RuleValidator implements EventSubscriberInterface
         $criteria = new Criteria($ids);
         $criteria->setLimit(null);
 
-        return $this->ruleConditionRepository->search($criteria, $context)->getEntities();
+        /** @var RuleConditionCollection $entities */
+        $entities = $this->ruleConditionRepository->search($criteria, $context)->getEntities();
+
+        return $entities;
     }
 
+    /**
+     * @param array<int|string> $parameters
+     */
     private function buildViolation(
         string $messageTemplate,
         array $parameters,
@@ -238,5 +251,29 @@ class RuleValidator implements EventSubscriberInterface
             null,
             $code
         );
+    }
+
+    /**
+     * @param array<mixed> $payload
+     */
+    private function setScriptConstraints(
+        ScriptRule $ruleInstance,
+        ?RuleConditionEntity $condition,
+        array $payload,
+        Context $context
+    ): void {
+        $script = null;
+        if (isset($payload['script_id'])) {
+            $scriptId = Uuid::fromBytesToHex($payload['script_id']);
+            $script = $this->appScriptConditionRepository->search(new Criteria([$scriptId]), $context)->get($scriptId);
+        } elseif ($condition && $condition->getAppScriptCondition()) {
+            $script = $condition->getAppScriptCondition();
+        }
+
+        if (!$script instanceof AppScriptConditionEntity || !\is_array($script->getConstraints())) {
+            return;
+        }
+
+        $ruleInstance->setConstraints($script->getConstraints());
     }
 }

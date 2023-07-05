@@ -5,12 +5,15 @@ const { Component, Mixin } = Shopware;
 const utils = Shopware.Utils;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @description Boolean input field based on checkbox.
  * @status ready
  * @example-type static
  * @component-example
- * <sw-checkbox-field label="Name" v-model="aBooleanProperty"></sw-checkbox-field>
+ * <sw-checkbox-field v-model="aBooleanProperty" label="Name"></sw-checkbox-field>
  */
 Component.register('sw-checkbox-field', {
     template,
@@ -68,6 +71,12 @@ Component.register('sw-checkbox-field', {
             required: false,
             default: false,
         },
+
+        padded: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
     },
 
     data() {
@@ -84,7 +93,13 @@ Component.register('sw-checkbox-field', {
                 'is--disabled': this.disabled,
                 'is--inherited': this.isInherited,
                 'sw-field__checkbox--ghost': this.ghostValue,
+            };
+        },
+
+        swCheckboxFieldContentClasses() {
+            return {
                 'is--bordered': this.bordered,
+                'is--padded': this.padded,
             };
         },
 

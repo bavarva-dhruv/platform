@@ -2,16 +2,22 @@ import RuleAssignmentConfigurationService from 'src/module/sw-settings-rule/serv
 import template from './sw-settings-rule-detail-assignments.html.twig';
 import './sw-settings-rule-detail-assignments.scss';
 
-const { Component, Mixin, Context, Utils } = Shopware;
+const { Mixin, Context, Utils } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-settings-rule-detail-assignments', {
+/**
+ * @private
+ * @package business-ops
+ */
+export default {
     // eslint-disable-next-line max-len
     template,
 
     inject: [
         'repositoryFactory',
+        'ruleConditionDataProviderService',
         'feature',
+        'acl',
     ],
 
     mixins: [
@@ -22,6 +28,18 @@ Component.register('sw-settings-rule-detail-assignments', {
         rule: {
             type: Object,
             required: true,
+        },
+
+        conditions: {
+            type: Array,
+            required: false,
+            default: null,
+        },
+
+        detailPageLoading: {
+            type: Boolean,
+            required: false,
+            default: false,
         },
     },
 
@@ -34,7 +52,6 @@ Component.register('sw-settings-rule-detail-assignments', {
             shippingMethods: null,
             paymentMethods: null,
             promotions: null,
-            eventActions: null,
             associationSteps: [5, 10],
             associationEntities: null,
             deleteModal: false,
@@ -76,7 +93,18 @@ Component.register('sw-settings-rule-detail-assignments', {
         },
 
         disableAdd(entity) {
+            const association = entity.associationName ?? null;
+            if (this.ruleConditionDataProviderService.isRuleRestricted(this.conditions, association)) {
+                return true;
+            }
+
             return entity.notAssignedDataTotal === 0;
+        },
+
+        getTooltipConfig(entity) {
+            const association = entity.associationName ?? null;
+
+            return this.ruleConditionDataProviderService.getRestrictedRuleTooltipConfig(this.conditions, association);
         },
 
         allowDeletion(entity) {
@@ -152,10 +180,14 @@ Component.register('sw-settings-rule-detail-assignments', {
                 Utils.object.get(this.deleteItem, this.deleteEntity.deleteContext.column).remove(this.rule.id);
             }
 
-            return repository.save(this.deleteItem, api);
+            this.isLoading = true;
+            return repository.save(this.deleteItem, api).finally(() => {
+                this.isLoading = false;
+            });
         },
 
         async refreshAssignmentData(entity) {
+            this.isLoading = true;
             const api = entity.api ? entity.api() : Context.api;
             const result = await entity.repository.search(entity.criteria(), api);
             const total = await this.loadNotAssignedDataTotals(entity, api);
@@ -166,6 +198,7 @@ Component.register('sw-settings-rule-detail-assignments', {
                     currentEntity.notAssignedDataTotal = total;
                 }
             });
+            this.isLoading = false;
         },
 
         onFilterEntity(item, term) {
@@ -175,8 +208,11 @@ Component.register('sw-settings-rule-detail-assignments', {
             criteria.setPage(1);
             criteria.setTerm(term);
 
+            this.isLoading = true;
             return item.repository.search(criteria, api).then((result) => {
                 item.loadedData = result;
+            }).finally(() => {
+                this.isLoading = false;
             });
         },
 
@@ -185,12 +221,14 @@ Component.register('sw-settings-rule-detail-assignments', {
                 return Promise.resolve(true);
             }
 
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 1);
             criteria.addFilter(Criteria.not('AND', item.criteria().filters));
-            criteria.setLimit(1);
 
+            this.isLoading = true;
             return item.repository.search(criteria, api).then((notAssignedDataResult) => {
                 return Promise.resolve(notAssignedDataResult.total);
+            }).finally(() => {
+                this.isLoading = false;
             });
         },
 
@@ -221,4 +259,4 @@ Component.register('sw-settings-rule-detail-assignments', {
                 });
         },
     },
-});
+};

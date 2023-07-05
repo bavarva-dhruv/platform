@@ -4,6 +4,9 @@ import './sw-confirm-field.scss';
 const { Component } = Shopware;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @description Text field with additional confirmation buttons inlined in the field itself.
  * @status ready
@@ -44,6 +47,12 @@ Component.register('sw-confirm-field', {
             required: false,
             default: false,
         },
+
+        error: {
+            type: Object,
+            required: false,
+            default: null,
+        },
     },
 
     data() {
@@ -59,6 +68,7 @@ Component.register('sw-confirm-field', {
             return {
                 'sw-confirm-field--compact': this.compact,
                 'sw-confirm-field--editing': this.isEditing,
+                'has--error': !!this.error,
             };
         },
     },
@@ -67,6 +77,10 @@ Component.register('sw-confirm-field', {
         value() {
             this.draft = this.value;
         },
+    },
+
+    beforeDestroy() {
+        this.$emit('remove-error');
     },
 
     methods: {
@@ -119,6 +133,10 @@ Component.register('sw-confirm-field', {
             this.event = 'click';
             this.submitValue();
             this.isEditing = false;
+        },
+
+        onInput() {
+            this.$emit('remove-error');
         },
     },
 });

@@ -10,9 +10,10 @@ use Shopware\Core\Checkout\Cart\Rule\LineItemRule;
 use Shopware\Core\Checkout\Cart\Rule\LineItemScope;
 use Shopware\Core\Checkout\Test\Cart\Rule\Helper\CartRuleHelperTrait;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
@@ -22,15 +23,19 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Type;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class LineItemRuleTest extends TestCase
 {
     use CartRuleHelperTrait;
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    private EntityRepositoryInterface $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    private EntityRepositoryInterface $conditionRepository;
+    private EntityRepository $conditionRepository;
 
     private Context $context;
 
@@ -189,7 +194,7 @@ class LineItemRuleTest extends TestCase
     {
         $matches = $this->getLineItemRule()->match(
             new LineItemScope(
-                ($this->createLineItem())->setPayloadValue('parentId', 'A'),
+                $this->createLineItem()->setPayloadValue('parentId', 'A'),
                 $this->createMock(SalesChannelContext::class)
             )
         );
@@ -201,31 +206,7 @@ class LineItemRuleTest extends TestCase
     {
         $matches = $this->getLineItemRule()->match(
             new LineItemScope(
-                ($this->createLineItem())->setPayloadValue('parentId', 'C'),
-                $this->createMock(SalesChannelContext::class)
-            )
-        );
-
-        static::assertFalse($matches);
-    }
-
-    public function testNotMatchesWithPayloadId(): void
-    {
-        $matches = $this->getLineItemRule(Rule::OPERATOR_NEQ)->match(
-            new LineItemScope(
-                ($this->createLineItem())->setPayloadValue('id', 'A'),
-                $this->createMock(SalesChannelContext::class)
-            )
-        );
-
-        static::assertFalse($matches);
-    }
-
-    public function testNotMatchesDifferentPayloadId(): void
-    {
-        $matches = $this->getLineItemRule()->match(
-            new LineItemScope(
-                ($this->createLineItem())->setPayloadValue('id', 'C'),
+                $this->createLineItem()->setPayloadValue('parentId', 'C'),
                 $this->createMock(SalesChannelContext::class)
             )
         );

@@ -6,18 +6,13 @@
              role="document">
             <div class="modal-content">
                 <div class="modal-header only-close">
-                    <h5 class="modal-title js-pseudo-modal-template-title-element"></h5>
+                    <div class="modal-title js-pseudo-modal-template-title-element h5"></div>
+
                     <button type="button"
-                            class="{{ modalCloseBtnClass }} close"
-                            {{ dataBsDismissAttr }}="modal"
+                            class="btn-close close"
+                            data-bs-dismiss="modal"
                             aria-label="Close">
                         {% block product_detail_zoom_modal_close_button_content %}
-                            {# @deprecated tag:v6.5.0 - Bootstrap v5 creates "x" symbol automatically via SVG background #}
-                            {% if not feature('v6.5.0.0') %}
-                                <span aria-hidden="true">
-                                    {% sw_icon 'x' style { 'size': 'sm' } %}
-                                </span>
-                            {% endif %}
                         {% endblock %}
                     </button>
                 </div>

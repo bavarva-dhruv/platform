@@ -3,6 +3,9 @@ import template from './sw-entity-multi-id-select.html.twig';
 const { Component, Context, Mixin } = Shopware;
 const { EntityCollection, Criteria } = Shopware.Data;
 
+/**
+ * @deprecated tag:v6.6.0 - Will be private
+ */
 Component.register('sw-entity-multi-id-select', {
     template,
     inheritAttrs: false,
@@ -34,7 +37,7 @@ Component.register('sw-entity-multi-id-select', {
             type: Object,
             required: false,
             default() {
-                return new Criteria();
+                return new Criteria(1, 25);
             },
         },
 
@@ -116,6 +119,11 @@ Component.register('sw-entity-multi-id-select', {
 
             return this.repository.search(criteria, { ...this.context, inheritance: true }).then((entities) => {
                 this.collection = entities;
+
+                if (!this.collection.length && this.ids.length) {
+                    this.updateIds(this.collection);
+                }
+
                 return this.collection;
             });
         },

@@ -1,9 +1,13 @@
 import template from './sw-cms-el-buy-box.html.twig';
 import './sw-cms-el-buy-box.scss';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 
-Component.register('sw-cms-el-buy-box', {
+/**
+ * @private
+ * @package content
+ */
+export default {
     template,
 
     mixins: [
@@ -17,7 +21,7 @@ Component.register('sw-cms-el-buy-box', {
                 return this.currentDemoEntity;
             }
 
-            if (!this.element.data || !this.element.data.product) {
+            if (!this.element.data?.product) {
                 return {
                     name: 'Lorem Ipsum dolor',
                     productNumber: 'XXXXXX',
@@ -43,7 +47,7 @@ Component.register('sw-cms-el-buy-box', {
         },
 
         alignStyle() {
-            if (!this.element.config.alignment || !this.element.config.alignment.value) {
+            if (!this.element.config?.alignment?.value) {
                 return null;
             }
 
@@ -76,4 +80,4 @@ Component.register('sw-cms-el-buy-box', {
             this.$set(this.element, 'locked', this.isProductPageType);
         },
     },
-});
+};

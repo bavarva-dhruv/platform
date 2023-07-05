@@ -7,15 +7,20 @@ use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\CustomerNumberRule;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class CustomerNumberRuleTest extends TestCase
 {
     public function testExactMatch(): void
     {
         $rule = (new CustomerNumberRule())->assign(['numbers' => ['NO. 1']]);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $customer = new CustomerEntity();
         $customer->setCustomerNumber('NO. 1');
@@ -35,7 +40,7 @@ class CustomerNumberRuleTest extends TestCase
     {
         $rule = (new CustomerNumberRule())->assign(['numbers' => ['NO. 1', 'NO. 2', 'NO. 3']]);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $customer = new CustomerEntity();
         $customer->setCustomerNumber('NO. 2');
@@ -55,7 +60,7 @@ class CustomerNumberRuleTest extends TestCase
     {
         $rule = (new CustomerNumberRule())->assign(['numbers' => ['NO. 1']]);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $customer = new CustomerEntity();
         $customer->setCustomerNumber('no. 1');
@@ -75,7 +80,7 @@ class CustomerNumberRuleTest extends TestCase
     {
         $rule = (new CustomerNumberRule())->assign(['numbers' => ['NO. 1']]);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 
@@ -92,7 +97,7 @@ class CustomerNumberRuleTest extends TestCase
     {
         $rule = (new CustomerNumberRule())->assign(['numbers' => ['NO. 1']]);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $customer = new CustomerEntity();
         $customer->setCustomerNumber('no. 2');

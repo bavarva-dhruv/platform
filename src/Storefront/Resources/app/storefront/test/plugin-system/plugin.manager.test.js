@@ -1,6 +1,3 @@
-/**
- * @jest-environment jsdom
- */
 import PluginManager from 'src/plugin-system/plugin.manager';
 import Plugin from 'src/plugin-system/plugin.class';
 import Iterator from "../../src/helper/iterator.helper";
@@ -9,10 +6,14 @@ class FooPluginClass extends Plugin {
     init() {}
 }
 
+/**
+ * @package storefront
+ */
 describe('Plugin manager', () => {
     beforeEach(() => {
         document.body.innerHTML = '<div data-plugin="true" class="test-class"></div><div id="test-id"></div>';
         jest.spyOn(console, 'error').mockImplementation();
+
     });
 
     afterEach(() => {

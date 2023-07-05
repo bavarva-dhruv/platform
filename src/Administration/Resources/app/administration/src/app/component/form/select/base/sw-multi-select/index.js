@@ -4,6 +4,9 @@ const { Component, Mixin } = Shopware;
 const { debounce, get } = Shopware.Utils;
 
 /**
+ * @package admin
+ *
+ * @deprecated tag:v6.6.0 - Will be private
  * @public
  * @status ready
  * @description Renders a multi select field with a defined list of options. This component uses the sw-field base

@@ -5,6 +5,15 @@ const { Component, Mixin } = Shopware;
 const { mapPropertyErrors } = Component.getComponentHelper();
 const { Criteria } = Shopware.Data;
 
+/**
+ * @public
+ * @package business-ops
+ * @description Customer custom item for the condition-tree. This component must be a child of sw-condition-tree.
+ * @status prototype
+ * @example-type code-only
+ * @component-example
+ * <sw-condition-customer-custom-field :condition="condition"></sw-condition-customer-custom-field>
+ */
 Component.extend('sw-condition-customer-custom-field', 'sw-condition-base', {
     template,
 
@@ -21,22 +30,10 @@ Component.extend('sw-condition-customer-custom-field', 'sw-condition-base', {
          * @returns {Object.Criteria}
          */
         customFieldCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.addAssociation('customFieldSet');
             criteria.addFilter(Criteria.equals('customFieldSet.relations.entityName', 'customer'));
             criteria.addSorting(Criteria.sort('customFieldSet.name', 'ASC'));
-            return criteria;
-        },
-
-        /**
-         * Only fetch custom field sets that are related to customer use context
-         * @major-deprecated tag:v6.5.0 - The computed property "customFieldSetCriteria"
-         * will be removed because the set is fetched by association of the field instead
-         * @returns {Object.Criteria}
-         */
-        customFieldSetCriteria() {
-            const criteria = new Criteria();
-            criteria.addFilter(Criteria.equals('relations.entityName', 'customer'));
             return criteria;
         },
 
@@ -132,17 +129,6 @@ Component.extend('sw-condition-customer-custom-field', 'sw-condition-base', {
 
             this.operator = null;
             this.renderedFieldValue = null;
-        },
-
-        /**
-         * Clear any further field's value if custom field set selection has changed
-         * @major-deprecated tag:v6.5.0 - The method "onFieldSetChange"
-         * will be removed because the set will instead be determined by the selected field
-         */
-        onFieldSetChange() {
-            this.selectedField = null;
-            this.operator = null;
-            this.renderedField = null;
         },
     },
 });

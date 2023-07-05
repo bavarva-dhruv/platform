@@ -1,9 +1,10 @@
 import template from './sw-mail-header-footer-list.html.twig';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-mail-header-footer-list', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory', 'acl'],
@@ -88,6 +89,7 @@ Component.register('sw-mail-header-footer-list', {
                 dataIndex: 'name',
                 label: 'sw-mail-header-footer.list.columnName',
                 allowResize: true,
+                routerLink: 'sw.mail.template.detail_head_foot',
                 primary: true,
             }, {
                 property: 'description',
@@ -145,7 +147,7 @@ Component.register('sw-mail-header-footer-list', {
                 this.showDeleteErrorNotification(item);
             }
 
-            this.mailHeaderFooterRepository.delete(item.id)
+            return this.mailHeaderFooterRepository.delete(item.id)
                 .then(() => {
                     this.$refs.listing.resetSelection();
                     this.$refs.listing.doSearch();
@@ -153,7 +155,7 @@ Component.register('sw-mail-header-footer-list', {
         },
 
         getMailHeaderFooterCriteria(mailHeaderFooter) {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
 
             criteria.addFilter(
                 Criteria.equalsAny('id', mailHeaderFooter),
@@ -192,4 +194,4 @@ Component.register('sw-mail-header-footer-list', {
             this.mailHeaderFooters = result;
         },
     },
-});
+};

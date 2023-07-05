@@ -9,6 +9,7 @@ use Shopware\Core\Content\Seo\SeoUrlUpdater;
 use Shopware\Core\Content\Test\Product\ProductBuilder;
 use Shopware\Core\Content\Test\TestProductSeoUrlRoute;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
@@ -16,6 +17,9 @@ use Shopware\Core\Framework\Test\TestCaseBase\SalesChannelApiTestBehaviour;
 use Shopware\Core\Framework\Test\TestDataCollection;
 use Shopware\Core\Framework\Uuid\Uuid;
 
+/**
+ * @internal
+ */
 class SeoUrlUpdaterTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -28,6 +32,9 @@ class SeoUrlUpdaterTest extends TestCase
 
     private TestDataCollection $ids;
 
+    /**
+     * @var array<string, mixed>
+     */
     private array $salesChannel;
 
     protected function setUp(): void
@@ -79,6 +86,8 @@ class SeoUrlUpdaterTest extends TestCase
      * Checks whether the seo url updater is using the correct language for translations.
      *
      * @dataProvider seoLanguageDataProvider
+     *
+     * @param list<string> $translations
      */
     public function testSeoLanguageInheritance(array $translations, string $pathInfo): void
     {
@@ -100,7 +109,7 @@ class SeoUrlUpdaterTest extends TestCase
 
         $this->getContainer()->get('product.repository')->create([
             $productBuilder->build(),
-        ], $this->ids->getContext());
+        ], Context::createDefaultContext());
 
         // Manually trigger the updater, as the automatic updater triggers only for the storefront routes
         $this->getContainer()->get(SeoUrlUpdater::class)->update(
@@ -115,7 +124,7 @@ class SeoUrlUpdaterTest extends TestCase
         $criteria->addFilter(new EqualsFilter('salesChannelId', $this->salesChannel['id']));
         $seoUrl = $this->getContainer()->get('seo_url.repository')->search(
             $criteria,
-            $this->ids->getContext()
+            Context::createDefaultContext()
         )->first();
 
         // Check if seo url was created
@@ -125,7 +134,10 @@ class SeoUrlUpdaterTest extends TestCase
         static::assertStringStartsWith($pathInfo, $seoUrl->getSeoPathInfo());
     }
 
-    public function seoLanguageDataProvider(): array
+    /**
+     * @return list<array{translations: list<string>, pathInfo: string}>
+     */
+    public static function seoLanguageDataProvider(): array
     {
         return [
             [

@@ -3,19 +3,23 @@
 namespace Shopware\Core\Checkout\Test\Cart\Rule;
 
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\Checkout\Cart\Exception\InvalidQuantityException;
+use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\LineItem\LineItemCollection;
 use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Cart\Rule\LineItemActualStockRule;
 use Shopware\Core\Checkout\Cart\Rule\LineItemScope;
 use Shopware\Core\Checkout\Test\Cart\Rule\Helper\CartRuleHelperTrait;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
 /**
+ * @internal
+ *
  * @group rules
  */
+#[Package('business-ops')]
 class LineItemActualStockRuleTest extends TestCase
 {
     use CartRuleHelperTrait;
@@ -55,14 +59,14 @@ class LineItemActualStockRuleTest extends TestCase
         ]);
 
         $match = $this->rule->match(new LineItemScope(
-            ($this->createLineItemWithStock(999))->setPayloadValue('stock', $lineItemStock),
+            $this->createLineItemWithStock(999)->setPayloadValue('stock', $lineItemStock),
             $this->createMock(SalesChannelContext::class)
         ));
 
         static::assertSame($expected, $match);
     }
 
-    public function getMatchingRuleTestData(): \Generator
+    public static function getMatchingRuleTestData(): \Generator
     {
         // OPERATOR_EQ
         yield 'match / operator equals / same stock' => [Rule::OPERATOR_EQ, 100, 100, true];
@@ -104,8 +108,8 @@ class LineItemActualStockRuleTest extends TestCase
         ]);
 
         $lineItemCollection = new LineItemCollection([
-            ($this->createLineItemWithStock(999))->setPayloadValue('stock', $lineItemStock1),
-            ($this->createLineItemWithStock(999))->setPayloadValue('stock', $lineItemStock2),
+            $this->createLineItemWithStock(999)->setPayloadValue('stock', $lineItemStock1),
+            $this->createLineItemWithStock(999)->setPayloadValue('stock', $lineItemStock2),
         ]);
         $cart = $this->createCart($lineItemCollection);
 
@@ -133,8 +137,8 @@ class LineItemActualStockRuleTest extends TestCase
         ]);
 
         $lineItemCollection = new LineItemCollection([
-            ($this->createLineItemWithStock(999))->setPayloadValue('stock', $lineItemStock1),
-            ($this->createLineItemWithStock(999))->setPayloadValue('stock', $lineItemStock2),
+            $this->createLineItemWithStock(999)->setPayloadValue('stock', $lineItemStock1),
+            $this->createLineItemWithStock(999)->setPayloadValue('stock', $lineItemStock2),
         ]);
         $containerLineItem = $this->createContainerLineItem($lineItemCollection);
         $cart = $this->createCart(new LineItemCollection([$containerLineItem]));
@@ -147,7 +151,7 @@ class LineItemActualStockRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getCartRuleScopeTestData(): \Generator
+    public static function getCartRuleScopeTestData(): \Generator
     {
         // OPERATOR_EQ
         yield 'match / operator equals / same stock' => [Rule::OPERATOR_EQ, 100, 100, 200, true];
@@ -175,7 +179,7 @@ class LineItemActualStockRuleTest extends TestCase
     }
 
     /**
-     * @throws InvalidQuantityException
+     * @throws CartException
      */
     public function testMatchWithEmptyDeliveryInformation(): void
     {

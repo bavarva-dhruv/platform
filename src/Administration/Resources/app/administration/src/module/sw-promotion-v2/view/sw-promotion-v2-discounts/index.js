@@ -1,10 +1,10 @@
 import template from './sw-promotion-v2-discounts.html.twig';
 import './sw-promotion-v2-discounts.scss';
 
-const { Component } = Shopware;
 const { createId } = Shopware.Utils;
 
-Component.register('sw-promotion-v2-discounts', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -101,4 +101,4 @@ Component.register('sw-promotion-v2-discounts', {
             });
         },
     },
-});
+};

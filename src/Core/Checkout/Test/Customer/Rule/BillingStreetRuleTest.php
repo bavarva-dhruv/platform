@@ -8,9 +8,11 @@ use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEnt
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\BillingStreetRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Rule\Exception\UnsupportedValueException;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
@@ -20,25 +22,20 @@ use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Type;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class BillingStreetRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $conditionRepository;
+    private EntityRepository $conditionRepository;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
     private BillingStreetRule $rule;
 
@@ -161,10 +158,38 @@ class BillingStreetRuleTest extends TestCase
         static::assertEquals(new Type('string'), $streetName[1]);
     }
 
+    public function testUnsupportedValue(): void
+    {
+        try {
+            $rule = new BillingStreetRule();
+            $salesChannelContext = $this->createMock(SalesChannelContext::class);
+            $customer = new CustomerEntity();
+            $customer->setActiveBillingAddress(new CustomerAddressEntity());
+            $salesChannelContext->method('getCustomer')->willReturn($customer);
+            $rule->match(new CheckoutRuleScope($salesChannelContext));
+            static::fail('Exception was not thrown');
+        } catch (\Throwable $exception) {
+            static::assertInstanceOf(UnsupportedValueException::class, $exception);
+        }
+    }
+
+    public function testRuleNotMatchingWithoutAddress(): void
+    {
+        $this->rule->assign(['streetName' => 'foo', 'operator' => Rule::OPERATOR_EQ]);
+        $salesChannelContext = $this->createMock(SalesChannelContext::class);
+
+        static::assertFalse($this->rule->match(new CheckoutRuleScope($salesChannelContext)));
+
+        $customer = new CustomerEntity();
+        $salesChannelContext->method('getCustomer')->willReturn($customer);
+
+        static::assertFalse($this->rule->match(new CheckoutRuleScope($salesChannelContext)));
+    }
+
     /**
      * @dataProvider getMatchValues
      */
-    public function testRuleMatching(string $operator, bool $isMatching, string $billingStreet): void
+    public function testRuleMatching(string $operator, bool $isMatching, string $billingStreet, bool $noCustomer = false, bool $noAddress = false): void
     {
         $streetName = 'kyln123';
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
@@ -172,7 +197,15 @@ class BillingStreetRuleTest extends TestCase
         $customerAddress->setStreet($billingStreet);
 
         $customer = new CustomerEntity();
-        $customer->setActiveBillingAddress($customerAddress);
+
+        if (!$noAddress) {
+            $customer->setActiveBillingAddress($customerAddress);
+        }
+
+        if ($noCustomer) {
+            $customer = null;
+        }
+
         $salesChannelContext->method('getCustomer')->willReturn($customer);
         $scope = new CheckoutRuleScope($salesChannelContext);
         $this->rule->assign(['streetName' => $streetName, 'operator' => $operator]);
@@ -185,15 +218,25 @@ class BillingStreetRuleTest extends TestCase
         }
     }
 
-    public function getMatchValues(): array
+    /**
+     * @return \Traversable<string, array<string|bool>>
+     */
+    public static function getMatchValues(): \Traversable
     {
-        return [
-            'operator_oq / not match / street' => [Rule::OPERATOR_EQ, false, 'kyln000'],
-            'operator_oq / match / street' => [Rule::OPERATOR_EQ, true, 'kyln123'],
-            'operator_neq / match / street' => [Rule::OPERATOR_NEQ, true, 'kyln000'],
-            'operator_neq / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'],
-            'operator_empty / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'],
-            'operator_empty / match / street' => [Rule::OPERATOR_EMPTY, true, ' '],
-        ];
+        yield 'operator_oq / not match / street' => [Rule::OPERATOR_EQ, false, 'kyln000'];
+        yield 'operator_oq / match / street' => [Rule::OPERATOR_EQ, true, 'kyln123'];
+        yield 'operator_neq / match / street' => [Rule::OPERATOR_NEQ, true, 'kyln000'];
+        yield 'operator_neq / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'];
+        yield 'operator_empty / not match / street' => [Rule::OPERATOR_NEQ, false, 'kyln123'];
+        yield 'operator_empty / match / street' => [Rule::OPERATOR_EMPTY, true, ' '];
+
+        yield 'operator_eq / no match / no customer' => [Rule::OPERATOR_EQ, false, '', true];
+        yield 'operator_eq / no match / no address' => [Rule::OPERATOR_EQ, false, '', false, true];
+
+        yield 'operator_empty / match / no customer' => [Rule::OPERATOR_EMPTY, true, '', true];
+        yield 'operator_empty / match / no address' => [Rule::OPERATOR_EMPTY, true, '', false, true];
+
+        yield 'operator_neq / match / no customer' => [Rule::OPERATOR_NEQ, true, '', true];
+        yield 'operator_neq / match / no address' => [Rule::OPERATOR_NEQ, true, '', false, true];
     }
 }

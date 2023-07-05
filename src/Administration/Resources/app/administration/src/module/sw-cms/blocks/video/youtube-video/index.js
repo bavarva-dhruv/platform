@@ -1,6 +1,18 @@
-import './component';
-import './preview';
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-preview-youtube-video', () => import('./preview'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-block-youtube-video', () => import('./component'));
 
+/**
+ * @private
+ * @package content
+ */
 Shopware.Service('cmsService').registerCmsBlock({
     name: 'youtube-video',
     label: 'sw-cms.blocks.video.youtubeVideo.label',

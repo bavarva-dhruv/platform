@@ -1,11 +1,16 @@
 import template from './sw-order-create-base.html.twig';
 
+/**
+ * @package customer-order
+ */
+
 const { Component, State, Utils, Data, Service, Mixin } = Shopware;
 const { Criteria } = Data;
 const { get, format, array } = Utils;
 const { mapGetters } = Component.getComponentHelper();
 
-Component.register('sw-order-create-base', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['feature'],
@@ -48,7 +53,7 @@ Component.register('sw-order-create-base', {
         },
 
         customerAddressCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
 
             criteria.addAssociation('salutation');
             criteria.addAssociation('country');
@@ -58,7 +63,7 @@ Component.register('sw-order-create-base', {
         },
 
         defaultCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria
                 .addAssociation('addresses')
                 .addAssociation('group')
@@ -111,7 +116,7 @@ Component.register('sw-order-create-base', {
         },
 
         currency() {
-            return State.get('swOrder').currency;
+            return State.get('swOrder').context.currency;
         },
 
         cartDelivery() {
@@ -241,7 +246,22 @@ Component.register('sw-order-create-base', {
         },
     },
 
+    created() {
+        this.createdComponent();
+    },
+
     methods: {
+        createdComponent() {
+            const { customer } = this.$route.params;
+
+            if (!customer) {
+                return;
+            }
+
+            State.commit('swOrder/setCustomer', customer);
+            this.onSelectExistingCustomer(customer.id);
+        },
+
         async createCart(salesChannelId) {
             await State.dispatch('swOrder/createCart', { salesChannelId });
         },
@@ -516,4 +536,4 @@ Component.register('sw-order-create-base', {
             this.loadCart();
         },
     },
-});
+};

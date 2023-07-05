@@ -2,48 +2,34 @@
 
 namespace Shopware\Core;
 
-use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\FetchMode;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
+use Shopware\Core\Framework\Adapter\Database\MySQLFactory;
 use Shopware\Core\Framework\Api\Controller\FallbackController;
-use Shopware\Core\Framework\Migration\MigrationStep;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\KernelPluginLoader\KernelPluginLoader;
-use Shopware\Core\Maintenance\Maintenance;
+use Shopware\Core\Framework\Util\VersionParser;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\Config\ConfigCache;
 use Symfony\Component\Config\Loader\LoaderInterface;
-use Symfony\Component\DependencyInjection\Compiler\DecoratorServicePass;
-use Symfony\Component\DependencyInjection\Compiler\ServiceLocatorTagPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\HttpKernel\Bundle\Bundle;
 use Symfony\Component\HttpKernel\Bundle\BundleInterface;
 use Symfony\Component\HttpKernel\Kernel as HttpKernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 use Symfony\Component\Routing\Route;
 
+#[Package('core')]
 class Kernel extends HttpKernel
 {
     use MicroKernelTrait;
 
-    /**
-     * @internal
-     *
-     * @deprecated tag:v6.5.0 The connection requirements should be fixed
-     */
-    public const PLACEHOLDER_DATABASE_URL = 'mysql://_placeholder.test';
-
-    public const CONFIG_EXTS = '.{php,xml,yaml,yml}';
+    final public const CONFIG_EXTS = '.{php,xml,yaml,yml}';
 
     /**
      * @var string Fallback version if nothing is provided via kernel constructor
      */
-    public const SHOPWARE_FALLBACK_VERSION = '6.4.9999999.9999999-dev';
-
-    /**
-     * @var string Regex pattern for validating Shopware versions
-     */
-    private const VALID_VERSION_PATTERN = '#^\d\.\d+\.\d+\.(\d+|x)(-\w+)?#';
+    final public const SHOPWARE_FALLBACK_VERSION = '6.5.9999999.9999999-dev';
 
     /**
      * @var Connection|null
@@ -72,8 +58,6 @@ class Kernel extends HttpKernel
 
     private bool $rebooting = false;
 
-    private string $cacheId;
-
     /**
      * {@inheritdoc}
      */
@@ -81,7 +65,7 @@ class Kernel extends HttpKernel
         string $environment,
         bool $debug,
         KernelPluginLoader $pluginLoader,
-        string $cacheId,
+        private string $cacheId,
         ?string $version = self::SHOPWARE_FALLBACK_VERSION,
         ?Connection $connection = null,
         ?string $projectDir = null
@@ -93,23 +77,21 @@ class Kernel extends HttpKernel
 
         $this->pluginLoader = $pluginLoader;
 
-        $this->parseShopwareVersion($version);
-        $this->cacheId = $cacheId;
+        $version = VersionParser::parseShopwareVersion($version);
+        $this->shopwareVersion = $version['version'];
+        $this->shopwareVersionRevision = $version['revision'];
         $this->projectDir = $projectDir;
     }
 
     /**
-     * @return \Generator<BundleInterface>
-     *
-     * @deprecated tag:v6.5.0 The return type will be native
+     * @return iterable<BundleInterface>
      */
-    public function registerBundles()/*: \Generator*/
+    public function registerBundles(): iterable
     {
-        /** @var array $bundles */
+        /** @var array<class-string<Bundle>, array<string, bool>> $bundles */
         $bundles = require $this->getProjectDir() . '/config/bundles.php';
         $instanciatedBundleNames = [];
 
-        /** @var class-string<\Symfony\Component\HttpKernel\Bundle\Bundle> $class */
         foreach ($bundles as $class => $envs) {
             if (isset($envs['all']) || isset($envs[$this->environment])) {
                 $bundle = new $class();
@@ -119,20 +101,10 @@ class Kernel extends HttpKernel
             }
         }
 
-        /* @deprecated tag:v6.5.0 Maintenance bundle need to be added to config/bundles.php file */
-        if (!\in_array('Maintenance', $instanciatedBundleNames, true)) {
-            yield new Maintenance();
-        }
-
         yield from $this->pluginLoader->getBundles($this->getKernelParameters(), $instanciatedBundleNames);
     }
 
-    /**
-     * @return string
-     *
-     * @deprecated tag:v6.5.0 The return type will be native
-     */
-    public function getProjectDir()/*: string*/
+    public function getProjectDir(): string
     {
         if ($this->projectDir === null) {
             if ($dir = $_ENV['PROJECT_ROOT'] ?? $_SERVER['PROJECT_ROOT'] ?? false) {
@@ -205,34 +177,11 @@ class Kernel extends HttpKernel
 
     public static function getConnection(): Connection
     {
-        if (!self::$connection) {
-            $url = EnvironmentHelper::getVariable('DATABASE_URL', getenv('DATABASE_URL'));
-            $parameters = [
-                'url' => $url,
-                'charset' => 'utf8mb4',
-                'driverOptions' => [
-                    \PDO::ATTR_STRINGIFY_FETCHES => true,
-                ],
-            ];
-
-            if ($sslCa = EnvironmentHelper::getVariable('DATABASE_SSL_CA')) {
-                $parameters['driverOptions'][\PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
-            }
-
-            if ($sslCert = EnvironmentHelper::getVariable('DATABASE_SSL_CERT')) {
-                $parameters['driverOptions'][\PDO::MYSQL_ATTR_SSL_CERT] = $sslCert;
-            }
-
-            if ($sslCertKey = EnvironmentHelper::getVariable('DATABASE_SSL_KEY')) {
-                $parameters['driverOptions'][\PDO::MYSQL_ATTR_SSL_KEY] = $sslCertKey;
-            }
-
-            if (EnvironmentHelper::getVariable('DATABASE_SSL_DONT_VERIFY_SERVER_CERT')) {
-                $parameters['driverOptions'][\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-            }
-
-            self::$connection = DriverManager::getConnection($parameters, new Configuration());
+        if (self::$connection) {
+            return self::$connection;
         }
+
+        self::$connection = MySQLFactory::create();
 
         return self::$connection;
     }
@@ -240,10 +189,11 @@ class Kernel extends HttpKernel
     public function getCacheDir(): string
     {
         return sprintf(
-            '%s/var/cache/%s_h%s',
+            '%s/var/cache/%s_h%s%s',
             $this->getProjectDir(),
             $this->getEnvironment(),
-            $this->getCacheHash()
+            $this->getCacheHash(),
+            EnvironmentHelper::getVariable('TEST_TOKEN') ?? ''
         );
     }
 
@@ -266,7 +216,7 @@ class Kernel extends HttpKernel
         parent::shutdown();
     }
 
-    public function reboot($warmupDir, ?KernelPluginLoader $pluginLoader = null, ?string $cacheId = null): void
+    public function reboot(?string $warmupDir, ?KernelPluginLoader $pluginLoader = null, ?string $cacheId = null): void
     {
         $this->rebooting = true;
 
@@ -285,8 +235,8 @@ class Kernel extends HttpKernel
 
     protected function configureContainer(ContainerBuilder $container, LoaderInterface $loader): void
     {
-        $container->setParameter('container.dumper.inline_class_loader', true);
-        $container->setParameter('container.dumper.inline_factories', true);
+        $container->setParameter('.container.dumper.inline_class_loader', true);
+        $container->setParameter('.container.dumper.inline_factories', true);
 
         $confDir = $this->getProjectDir() . '/config';
 
@@ -312,6 +262,8 @@ class Kernel extends HttpKernel
 
     /**
      * {@inheritdoc}
+     *
+     * @return array<string, mixed>
      */
     protected function getKernelParameters(): array
     {
@@ -320,7 +272,7 @@ class Kernel extends HttpKernel
         $activePluginMeta = [];
 
         foreach ($this->pluginLoader->getPluginInstances()->getActives() as $plugin) {
-            $class = \get_class($plugin);
+            $class = $plugin::class;
             $activePluginMeta[$class] = [
                 'name' => $plugin->getName(),
                 'path' => $plugin->getPath(),
@@ -382,16 +334,6 @@ class Kernel extends HttpKernel
         $connection = self::getConnection();
 
         try {
-            $nonDestructiveMigrations = $connection->executeQuery('
-            SELECT `creation_timestamp`
-            FROM `migration`
-            WHERE `update` IS NOT NULL AND `update_destructive` IS NULL
-        ')->fetchAll(FetchMode::COLUMN);
-
-            $activeMigrations = $this->container->getParameter('migration.active');
-
-            $activeNonDestructiveMigrations = array_intersect($activeMigrations, $nonDestructiveMigrations);
-
             $setSessionVariables = (bool) EnvironmentHelper::getVariable('SQL_SET_DEFAULT_SESSION_VARIABLES', true);
             $connectionVariables = [];
 
@@ -402,50 +344,15 @@ class Kernel extends HttpKernel
 
             if ($setSessionVariables) {
                 $connectionVariables[] = 'SET @@group_concat_max_len = CAST(IF(@@group_concat_max_len > 320000, @@group_concat_max_len, 320000) AS UNSIGNED)';
-                $connectionVariables[] = "SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))";
-            }
-
-            foreach ($activeNonDestructiveMigrations as $migration) {
-                $connectionVariables[] = sprintf(
-                    'SET %s = TRUE',
-                    sprintf(MigrationStep::MIGRATION_VARIABLE_FORMAT, $migration)
-                );
+                $connectionVariables[] = 'SET sql_mode=(SELECT REPLACE(@@sql_mode,\'ONLY_FULL_GROUP_BY\',\'\'))';
             }
 
             if (empty($connectionVariables)) {
                 return;
             }
             $connection->executeQuery(implode(';', $connectionVariables));
-        } catch (\Throwable $_) {
+        } catch (\Throwable) {
         }
-    }
-
-    /**
-     * @deprecated tag:v6.5.0 Remove when Symfony 5.3.7 is released and we bumped up the minimum version
-     * @see https://github.com/symfony/symfony/pull/42347
-     */
-    protected function getContainerBuilder()
-    {
-        $c = parent::getContainerBuilder();
-
-        $passes = $c->getCompilerPassConfig()->getOptimizationPasses();
-        $newPasses = [];
-
-        foreach ($passes as $pass) {
-            if ($pass instanceof DecoratorServicePass) {
-                continue;
-            }
-
-            $newPasses[] = $pass;
-
-            if ($pass instanceof ServiceLocatorTagPass) {
-                $newPasses[] = new DecoratorServicePass();
-            }
-        }
-
-        $c->getCompilerPassConfig()->setOptimizationPasses($newPasses);
-
-        return $c;
     }
 
     /**
@@ -502,33 +409,8 @@ PHP;
         $route = new Route('/');
         $route->setMethods(['GET']);
         $route->setDefault('_controller', FallbackController::class . '::rootFallback');
+        $route->setDefault(PlatformRequest::ATTRIBUTE_ROUTE_SCOPE, ['storefront']);
 
         $routes->add('root.fallback', $route->getPath());
-    }
-
-    private function parseShopwareVersion(?string $version): void
-    {
-        // does not come from composer, was set manually
-        if ($version === null || mb_strpos($version, '@') === false) {
-            $this->shopwareVersion = self::SHOPWARE_FALLBACK_VERSION;
-            $this->shopwareVersionRevision = str_repeat('0', 32);
-
-            return;
-        }
-
-        [$version, $hash] = explode('@', $version);
-        $version = ltrim($version, 'v');
-        $version = str_replace('+', '-', $version);
-
-        /*
-         * checks if the version is a valid version pattern
-         * Shopware\Core\Framework\Test\KernelTest::testItCreatesShopwareVersion()
-         */
-        if (!preg_match(self::VALID_VERSION_PATTERN, $version)) {
-            $version = self::SHOPWARE_FALLBACK_VERSION;
-        }
-
-        $this->shopwareVersion = $version;
-        $this->shopwareVersionRevision = $hash;
     }
 }

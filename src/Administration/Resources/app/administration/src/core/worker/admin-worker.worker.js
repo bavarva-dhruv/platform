@@ -1,4 +1,6 @@
 /**
+ * @package admin
+ *
  * @module core/worker/admin-worker
  */
 
@@ -10,13 +12,22 @@ import Axios from 'axios';
 // eslint-disable-next-line no-restricted-globals
 self.onmessage = onMessage;
 
+const { CancelToken } = Axios;
 let isRunning = false;
 let loginService;
 let scheduledTaskService;
 let messageQueueService;
+let cancelTokenSource = CancelToken.source();
+let consumeTimeoutIds = {};
 
 function onMessage({ data: { context, bearerAuth, host, transports, type } }) {
-    if (type === 'logout') {
+    // This if statement is so ugly, because we cannot use ES6 Syntax in web workers
+    if (type === 'logout' ||
+        !(typeof context === 'object' &&
+            context.hasOwnProperty('apiResourcePath') &&
+            context.apiResourcePath
+        )
+    ) {
         isRunning = false;
         return;
     }
@@ -31,21 +42,29 @@ function onMessage({ data: { context, bearerAuth, host, transports, type } }) {
     scheduledTaskService = new ScheduledTaskService(client, loginService);
     messageQueueService = new MessageQueueService(client, loginService);
 
+    if (type === 'consumeReset') {
+        cancelConsumeMessages();
+    }
+
     // only start listener once
     if (isRunning) {
         return;
     }
     isRunning = true;
 
+    transports.forEach((receiver) => {
+        consumeMessages(receiver);
+    });
+
+    if (type === 'consumeReset') {
+        return;
+    }
+
     scheduledTaskService.getMinRunInterval().then((response) => {
         if (response.minRunInterval > 0) {
             const timeout = response.minRunInterval * 1000;
             runTasks(timeout);
         }
-    });
-
-    transports.forEach((receiver) => {
-        consumeMessages(receiver);
     });
 }
 
@@ -72,18 +91,22 @@ function consumeMessages(receiver, _setTimeout = setTimeout) {
         return;
     }
 
-    messageQueueService.consume(receiver)
+    messageQueueService.consume(receiver, cancelTokenSource.token)
         .then((response) => {
             // no message handled, set timeout to 20 seconds to send next consume call.
             // if a message handled, directly send next consume call.
             const timeout = response.handledMessages === 0 ? 20000 : 0;
 
-            _setTimeout(() => {
+            consumeTimeoutIds[receiver] = _setTimeout(() => {
                 consumeMessages(receiver);
             }, timeout);
         })
         .catch((error) => {
-            _setTimeout(() => {
+            if (Axios.isCancel(error)) {
+                return error;
+            }
+
+            consumeTimeoutIds[receiver] = _setTimeout(() => {
                 consumeMessages(receiver);
             }, 10000);
 
@@ -91,8 +114,22 @@ function consumeMessages(receiver, _setTimeout = setTimeout) {
         });
 }
 
+function cancelConsumeMessages() {
+    cancelTokenSource.cancel();
+
+    Object.values(consumeTimeoutIds).forEach((id) => {
+        clearTimeout(id);
+    });
+
+    cancelTokenSource = CancelToken.source();
+    consumeTimeoutIds = {};
+    isRunning = false;
+}
+
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
 export default {
     onMessage,
     runTasks,
     consumeMessages,
+    cancelConsumeMessages,
 };

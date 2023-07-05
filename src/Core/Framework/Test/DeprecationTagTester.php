@@ -2,6 +2,12 @@
 
 namespace Shopware\Core\Framework\Test;
 
+use Shopware\Core\Framework\Log\Package;
+
+/**
+ * @internal
+ */
+#[Package('core')]
 class DeprecationTagTester
 {
     /**
@@ -19,14 +25,10 @@ class DeprecationTagTester
      */
     private const MANIFEST_VERSION_SCHEMA = '\d+\.\d+';
 
-    private string $shopwareVersion;
-
-    private string $manifestVersion;
-
-    public function __construct(string $shopwareVersion, string $manifestVersion)
-    {
-        $this->shopwareVersion = $shopwareVersion;
-        $this->manifestVersion = $manifestVersion;
+    public function __construct(
+        private readonly string $shopwareVersion,
+        private readonly string $manifestVersion
+    ) {
     }
 
     /**
@@ -88,18 +90,9 @@ class DeprecationTagTester
         $this->validateMatches($matches);
     }
 
-    public function validateTagElement(string $content): void
-    {
-        /*
-         * captures the version attribute from a tag element with name is set to deprecated
-         */
-        $tagPattern = '/\<tag name="shopware.deprecated".*version="(.*)".*\/?\>/';
-        $matches = [];
-        preg_match_all($tagPattern, $content, $matches, \PREG_SET_ORDER | \PREG_UNMATCHED_AS_NULL);
-
-        $this->validateMatches($matches);
-    }
-
+    /**
+     * @param array{1: string|null}[] $matches
+     */
     private function validateMatches(array $matches): void
     {
         if (empty($matches)) {

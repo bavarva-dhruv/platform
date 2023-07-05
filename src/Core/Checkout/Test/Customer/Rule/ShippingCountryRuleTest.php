@@ -7,9 +7,10 @@ use Shopware\Core\Checkout\Cart\Delivery\Struct\ShippingLocation;
 use Shopware\Core\Checkout\CheckoutRuleScope;
 use Shopware\Core\Checkout\Customer\Rule\ShippingCountryRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
@@ -20,25 +21,26 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class ShippingCountryRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
     /**
-     * @var EntityRepositoryInterface
+     * @var EntityRepository
      */
     private $ruleRepository;
 
     /**
-     * @var EntityRepositoryInterface
+     * @var EntityRepository
      */
     private $conditionRepository;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
     private ShippingCountryRule $rule;
 
@@ -240,11 +242,10 @@ class ShippingCountryRuleTest extends TestCase
     {
         $countryIds = ['kyln123', 'kyln456'];
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $location = $this->createMock(ShippingLocation::class);
 
         $country = new CountryEntity();
         $country->setId($countryId);
-        $location->method('getCountry')->willReturn($country);
+        $location = new ShippingLocation($country, null, null);
         $salesChannelContext->method('getShippingLocation')->willReturn($location);
         $scope = new CheckoutRuleScope($salesChannelContext);
         $this->rule->assign(['countryIds' => $countryIds, 'operator' => $operator]);
@@ -257,7 +258,7 @@ class ShippingCountryRuleTest extends TestCase
         }
     }
 
-    public function getMatchValues(): array
+    public static function getMatchValues(): array
     {
         return [
             'operator_oq / not match / country id' => [Rule::OPERATOR_EQ, false, Uuid::randomHex()],

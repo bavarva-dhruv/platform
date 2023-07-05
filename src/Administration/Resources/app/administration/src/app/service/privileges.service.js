@@ -1,8 +1,15 @@
+/**
+ * @package admin
+ */
+
 import Vue from 'vue';
 
 const { warn, error } = Shopware.Utils.debug;
 const { object } = Shopware.Utils;
 
+/**
+ * @deprecated tag:v6.6.0 - Will be private
+ */
 export default class PrivilegesService {
     alreadyImportedAdminPrivileges = [];
 

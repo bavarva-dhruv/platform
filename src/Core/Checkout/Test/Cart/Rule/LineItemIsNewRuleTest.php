@@ -9,12 +9,16 @@ use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Cart\Rule\LineItemIsNewRule;
 use Shopware\Core\Checkout\Cart\Rule\LineItemScope;
 use Shopware\Core\Checkout\Test\Cart\Rule\Helper\CartRuleHelperTrait;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\Type;
 
 /**
+ * @internal
+ *
  * @group rules
  */
+#[Package('business-ops')]
 class LineItemIsNewRuleTest extends TestCase
 {
     use CartRuleHelperTrait;
@@ -64,7 +68,10 @@ class LineItemIsNewRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getLineItemScopeTestData(): array
+    /**
+     * @return array<string, array<bool>>
+     */
+    public static function getLineItemScopeTestData(): array
     {
         return [
             'rule yes / newcomer yes' => [true, true, true],
@@ -118,7 +125,10 @@ class LineItemIsNewRuleTest extends TestCase
         static::assertSame($expected, $match);
     }
 
-    public function getCartRuleScopeTestData(): array
+    /**
+     * @return array<string, array<bool>>
+     */
+    public static function getCartRuleScopeTestData(): array
     {
         return [
             'rule yes / newcomer yes' => [true, true, true],
@@ -130,6 +140,6 @@ class LineItemIsNewRuleTest extends TestCase
 
     private function createLineItemWithIsNewMarker(bool $isNew): LineItem
     {
-        return ($this->createLineItem())->setPayloadValue('isNew', $isNew);
+        return $this->createLineItem()->setPayloadValue('isNew', $isNew);
     }
 }

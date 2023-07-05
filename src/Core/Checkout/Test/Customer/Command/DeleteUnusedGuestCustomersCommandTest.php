@@ -15,15 +15,22 @@ use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Checkout\Test\Customer\CustomerBuilder;
 use Shopware\Core\Content\Test\Product\ProductBuilder;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Pricing\CashRoundingConfig;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\IdsCollection;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
-use Shopware\Core\System\StateMachine\StateMachineRegistry;
+use Shopware\Core\System\StateMachine\Loader\InitialStateIdLoader;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Shopware\Core\Test\TestDefaults;
 use Symfony\Component\Console\Tester\CommandTester;
 
+/**
+ * @internal
+ */
+#[Package('customer-order')]
 class DeleteUnusedGuestCustomersCommandTest extends TestCase
 {
     use IntegrationTestBehaviour;
@@ -70,7 +77,7 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
             $customerGuestWithOrder->build(),
             $customerGuest->build(),
             $customer->build(),
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
 
         $this->createOrderForCustomer($customerGuestWithOrder->build());
 
@@ -87,7 +94,7 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
                 $this->ids->get('10001'),
                 $this->ids->get('10002'),
             ]))->addAssociation('orderCustomers'),
-            $this->ids->context
+            Context::createDefaultContext()
         )->getEntities();
 
         static::assertContains($this->ids->get('10000'), $customers->getIds());
@@ -130,7 +137,7 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
             $customerGuestWithOrder->build(),
             $customerGuest->build(),
             $customer->build(),
-        ], $this->ids->context);
+        ], Context::createDefaultContext());
 
         $this->createOrderForCustomer($customerGuestWithOrder->build());
 
@@ -144,7 +151,7 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
                 $this->ids->get('10001'),
                 $this->ids->get('10002'),
             ]))->addAssociation('orderCustomers'),
-            $this->ids->context
+            Context::createDefaultContext()
         )->getEntities();
 
         static::assertContains($this->ids->get('10000'), $customers->getIds());
@@ -165,7 +172,6 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
 
     private function createOrderForCustomer(array $customer): string
     {
-        $stateMachineRegistry = $this->getContainer()->get(StateMachineRegistry::class);
         $productRepository = $this->getContainer()->get('product.repository');
         $orderRepository = $this->getContainer()->get('order.repository');
 
@@ -173,23 +179,25 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
             ->price(10)
             ->build();
 
-        $productRepository->create([$product], $this->ids->context);
+        $productRepository->create([$product], Context::createDefaultContext());
 
         $orderId = Uuid::randomHex();
 
         $order = [
             'id' => $orderId,
             'orderDateTime' => (new \DateTimeImmutable())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+            'itemRounding' => json_decode(json_encode(new CashRoundingConfig(2, 0.01, true), \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
+            'totalRounding' => json_decode(json_encode(new CashRoundingConfig(2, 0.01, true), \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR),
             'price' => new CartPrice(10, 10, 10, new CalculatedTaxCollection(), new TaxRuleCollection(), CartPrice::TAX_STATE_NET),
             'shippingCosts' => new CalculatedPrice(10, 10, new CalculatedTaxCollection(), new TaxRuleCollection()),
-            'stateId' => $stateMachineRegistry->getInitialState(OrderStates::STATE_MACHINE, $this->ids->context)->getId(),
+            'stateId' => $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderStates::STATE_MACHINE),
             'paymentMethodId' => $this->getValidPaymentMethodId(),
             'currencyId' => Defaults::CURRENCY,
             'currencyFactor' => 1,
             'salesChannelId' => TestDefaults::SALES_CHANNEL,
             'deliveries' => [
                 [
-                    'stateId' => $stateMachineRegistry->getInitialState(OrderDeliveryStates::STATE_MACHINE, $this->ids->context)->getId(),
+                    'stateId' => $this->getContainer()->get(InitialStateIdLoader::class)->get(OrderDeliveryStates::STATE_MACHINE),
                     'shippingMethodId' => $this->getValidShippingMethodId(),
                     'shippingCosts' => new CalculatedPrice(10, 10, new CalculatedTaxCollection(), new TaxRuleCollection()),
                     'shippingDateEarliest' => date(\DATE_ISO8601),
@@ -227,7 +235,7 @@ class DeleteUnusedGuestCustomersCommandTest extends TestCase
             'billingAddressId' => $customer['defaultBillingAddressId'],
         ];
 
-        $orderRepository->create([$order], $this->ids->context);
+        $orderRepository->create([$order], Context::createDefaultContext());
 
         return $orderId;
     }

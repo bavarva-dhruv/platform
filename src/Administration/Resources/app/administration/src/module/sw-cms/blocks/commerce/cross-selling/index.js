@@ -1,6 +1,17 @@
-import './component';
-import './preview';
-
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-preview-cross-selling', () => import('./preview'));
+/**
+ * @private
+ * @package content
+ */
+Shopware.Component.register('sw-cms-block-cross-selling', () => import('./component'));
+/**
+ * @private
+ * @package content
+ */
 Shopware.Service('cmsService').registerCmsBlock({
     name: 'cross-selling',
     label: 'sw-cms.blocks.commerce.crossSelling.label',

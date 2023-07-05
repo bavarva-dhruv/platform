@@ -8,15 +8,20 @@ use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEntity;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\DifferentAddressesRule;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class DifferentAddressesRuleTest extends TestCase
 {
     public function testRuleMatch(): void
     {
         $rule = new DifferentAddressesRule();
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 
@@ -43,7 +48,7 @@ class DifferentAddressesRuleTest extends TestCase
     {
         $rule = new DifferentAddressesRule();
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 
@@ -70,7 +75,7 @@ class DifferentAddressesRuleTest extends TestCase
     {
         $rule = new DifferentAddressesRule();
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 

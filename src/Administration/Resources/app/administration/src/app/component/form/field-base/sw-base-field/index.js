@@ -1,9 +1,16 @@
+/**
+ * @package admin
+ */
+
 import template from './sw-base-field.html.twig';
 import './sw-base-field.scss';
 
 const { Component } = Shopware;
 const utils = Shopware.Utils;
 
+/**
+ * @deprecated tag:v6.6.0 - Will be private
+ */
 Component.register('sw-base-field', {
     template,
     inheritAttrs: false,
@@ -28,6 +35,12 @@ Component.register('sw-base-field', {
         },
 
         isInvalid: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
+
+        aiBadge: {
             type: Boolean,
             required: false,
             default: false,
@@ -98,6 +111,7 @@ Component.register('sw-base-field', {
         swFieldClasses() {
             return {
                 'has--error': this.hasError,
+                'has--hint': this.$slots.hint,
                 'is--disabled': this.disabled,
                 'is--inherited': this.isInherited,
             };

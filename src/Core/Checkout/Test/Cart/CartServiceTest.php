@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Checkout\Test\Cart;
 
-use Composer\Repository\RepositoryInterface;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\Event\AfterLineItemAddedEvent;
@@ -13,14 +12,16 @@ use Shopware\Core\Checkout\Cart\Event\BeforeLineItemQuantityChangedEvent;
 use Shopware\Core\Checkout\Cart\Event\BeforeLineItemRemovedEvent;
 use Shopware\Core\Checkout\Cart\Event\CartCreatedEvent;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
+use Shopware\Core\Checkout\Cart\LineItemFactoryHandler\ProductLineItemFactory;
+use Shopware\Core\Checkout\Cart\PriceDefinitionFactory;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Customer\SalesChannel\AccountService;
 use Shopware\Core\Content\MailTemplate\Service\Event\MailSentEvent;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
-use Shopware\Core\Content\Product\Cart\ProductLineItemFactory;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\CountryAddToSalesChannelTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\MailTemplateTestBehaviour;
@@ -37,32 +38,24 @@ use Shopware\Core\Test\TestDefaults;
 use Shopware\Storefront\Controller\AccountOrderController;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class CartServiceTest extends TestCase
 {
+    use CountryAddToSalesChannelTestBehaviour;
     use IntegrationTestBehaviour;
     use MailTemplateTestBehaviour;
     use TaxAddToSalesChannelTestBehaviour;
-    use CountryAddToSalesChannelTestBehaviour;
 
-    /**
-     * @var RepositoryInterface
-     */
-    private $customerRepository;
+    private EntityRepository $customerRepository;
 
-    /**
-     * @var AccountService|null
-     */
-    private $accountService;
+    private AccountService $accountService;
 
-    /**
-     * @var Connection|null
-     */
-    private $connection;
+    private Connection $connection;
 
-    /**
-     * @var string
-     */
-    private $productId;
+    private string $productId;
 
     protected function setUp(): void
     {
@@ -104,12 +97,12 @@ class CartServiceTest extends TestCase
         $cartService = $this->getContainer()->get(CartService::class);
 
         $token = Uuid::randomHex();
-        $newCart = $cartService->createNew($token, __METHOD__);
+        $newCart = $cartService->createNew($token);
 
         static::assertInstanceOf(CartCreatedEvent::class, $caughtEvent);
         static::assertSame($newCart, $caughtEvent->getCart());
         static::assertSame($newCart, $cartService->getCart($token, $this->getSalesChannelContext()));
-        static::assertNotSame($newCart, $cartService->createNew($token, __METHOD__));
+        static::assertNotSame($newCart, $cartService->createNew($token));
     }
 
     public function testLineItemAddedEventFired(): void
@@ -142,6 +135,7 @@ class CartServiceTest extends TestCase
             $context
         );
 
+        /** @phpstan-ignore-next-line */
         static::assertTrue($isMerged);
     }
 
@@ -162,7 +156,7 @@ class CartServiceTest extends TestCase
         $cart = $cartService->getCart($cartId, $context);
         $cartService->add(
             $cart,
-            (new LineItem('test', 'test')),
+            new LineItem('test', 'test'),
             $context
         );
     }
@@ -180,7 +174,7 @@ class CartServiceTest extends TestCase
 
         $context = $this->getSalesChannelContext();
 
-        $lineItem = (new ProductLineItemFactory())->create($this->productId);
+        $lineItem = (new ProductLineItemFactory(new PriceDefinitionFactory()))->create(['id' => $this->productId, 'referencedId' => $this->productId], $context);
 
         $cart = $cartService->getCart($context->getToken(), $context);
 
@@ -206,7 +200,7 @@ class CartServiceTest extends TestCase
 
         $context = $this->getSalesChannelContext();
 
-        $lineItem = (new ProductLineItemFactory())->create($this->productId);
+        $lineItem = (new ProductLineItemFactory(new PriceDefinitionFactory()))->create(['id' => $this->productId, 'referencedId' => $this->productId], $context);
 
         $cart = $cartService->getCart($context->getToken(), $context);
 
@@ -232,7 +226,7 @@ class CartServiceTest extends TestCase
 
         $context = $this->getSalesChannelContext();
 
-        $lineItem = (new ProductLineItemFactory())->create($this->productId);
+        $lineItem = (new ProductLineItemFactory(new PriceDefinitionFactory()))->create(['id' => $this->productId, 'referencedId' => $this->productId], $context);
 
         $cart = $cartService->getCart($context->getToken(), $context);
 
@@ -256,7 +250,7 @@ class CartServiceTest extends TestCase
 
         $context = $this->getSalesChannelContext();
 
-        $lineItem = (new ProductLineItemFactory())->create($this->productId);
+        $lineItem = (new ProductLineItemFactory(new PriceDefinitionFactory()))->create(['id' => $this->productId, 'referencedId' => $this->productId], $context);
 
         $cart = $cartService->getCart($context->getToken(), $context);
 
@@ -294,7 +288,7 @@ class CartServiceTest extends TestCase
             ->create([$product], $context->getContext());
         $this->addTaxDataToSalesChannel($context, $product['tax']);
 
-        $lineItem = (new ProductLineItemFactory())->create($productId);
+        $lineItem = (new ProductLineItemFactory(new PriceDefinitionFactory()))->create(['id' => $productId, 'referencedId' => $productId], $context);
 
         $cart = $cartService->getCart($context->getToken(), $context);
 
@@ -302,9 +296,15 @@ class CartServiceTest extends TestCase
 
         static::assertTrue($cart->has($productId));
         static::assertEquals(0, $cart->getPrice()->getTotalPrice());
+
         $calculatedLineItem = $cart->getLineItems()->get($productId);
+        static::assertNotNull($calculatedLineItem);
+        static::assertNotNull($calculatedLineItem->getPrice());
         static::assertEquals(0, $calculatedLineItem->getPrice()->getTotalPrice());
-        static::assertEquals(0, $calculatedLineItem->getPrice()->getCalculatedTaxes()->getAmount());
+
+        $calculatedTaxes = $calculatedLineItem->getPrice()->getCalculatedTaxes();
+        static::assertNotNull($calculatedTaxes);
+        static::assertEquals(0, $calculatedTaxes->getAmount());
     }
 
     public function testOrderCartSendMail(): void
@@ -329,7 +329,7 @@ class CartServiceTest extends TestCase
 
         $context = $contextService->get(new SalesChannelContextServiceParameters(TestDefaults::SALES_CHANNEL, $newtoken));
 
-        $lineItem = (new ProductLineItemFactory())->create($this->productId);
+        $lineItem = (new ProductLineItemFactory(new PriceDefinitionFactory()))->create(['id' => $this->productId, 'referencedId' => $this->productId], $context);
 
         $cartService = $this->getContainer()->get(CartService::class);
 
@@ -337,7 +337,6 @@ class CartServiceTest extends TestCase
 
         $cart = $cartService->add($cart, $lineItem, $context);
 
-        $this->assignMailtemplatesToSalesChannel(TestDefaults::SALES_CHANNEL, $context->getContext());
         $this->setDomainForSalesChannel('http://shopware.local', Defaults::LANGUAGE_SYSTEM, $context->getContext());
 
         $systemConfigService = $this->getContainer()->get(SystemConfigService::class);
@@ -377,7 +376,7 @@ class CartServiceTest extends TestCase
 
     private function createCustomer(string $addressId, string $mail, string $password, Context $context): void
     {
-        $this->connection->executeUpdate('DELETE FROM customer WHERE email = :mail', [
+        $this->connection->executeStatement('DELETE FROM customer WHERE email = :mail', [
             'mail' => $mail,
         ]);
 
@@ -417,7 +416,7 @@ class CartServiceTest extends TestCase
 
     private function setDomainForSalesChannel(string $domain, string $languageId, Context $context): void
     {
-        /** @var EntityRepositoryInterface $salesChannelRepository */
+        /** @var EntityRepository $salesChannelRepository */
         $salesChannelRepository = $this->getContainer()->get('sales_channel.repository');
 
         try {
@@ -434,8 +433,8 @@ class CartServiceTest extends TestCase
             ];
 
             $salesChannelRepository->update([$data], $context);
-        } catch (\Exception $e) {
-            //ignore if domain already exists
+        } catch (\Exception) {
+            // ignore if domain already exists
         }
     }
 }

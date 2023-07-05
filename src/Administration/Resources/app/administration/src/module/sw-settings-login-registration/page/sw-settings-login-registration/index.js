@@ -1,8 +1,9 @@
 import template from './sw-settings-login-registration.html.twig';
 
-const { Component, Mixin } = Shopware;
+const { Mixin } = Shopware;
 
-Component.register('sw-settings-login-registration', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     mixins: [
@@ -61,4 +62,4 @@ Component.register('sw-settings-login-registration', {
             this.coreSystemWideLoginRegistrationLoading = loading;
         },
     },
-});
+};

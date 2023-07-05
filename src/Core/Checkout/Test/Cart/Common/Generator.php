@@ -25,6 +25,7 @@ use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Pricing\CashRoundingConfig;
 use Shopware\Core\Framework\DataAbstractionLayer\TaxFreeConfig;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Country\Aggregate\CountryState\CountryStateEntity;
 use Shopware\Core\System\Country\CountryEntity;
@@ -37,12 +38,15 @@ use Shopware\Core\System\Tax\TaxCollection;
 use Shopware\Core\System\Tax\TaxEntity;
 use Shopware\Core\Test\TestDefaults;
 
+/**
+ * @internal
+ */
+#[Package('checkout')]
 class Generator extends TestCase
 {
     public static function createSalesChannelContext(
         ?Context $baseContext = null,
         ?CustomerGroupEntity $currentCustomerGroup = null,
-        ?CustomerGroupEntity $fallbackCustomerGroup = null,
         ?SalesChannelEntity $salesChannel = null,
         ?CurrencyEntity $currency = null,
         ?TaxCollection $taxes = null,
@@ -51,7 +55,9 @@ class Generator extends TestCase
         ?CustomerAddressEntity $shipping = null,
         ?PaymentMethodEntity $paymentMethod = null,
         ?ShippingMethodEntity $shippingMethod = null,
-        ?CustomerEntity $customer = null
+        ?CustomerEntity $customer = null,
+        ?string $token = null,
+        ?string $domainId = null,
     ): SalesChannelContext {
         if (!$baseContext) {
             $baseContext = Context::createDefaultContext();
@@ -66,7 +72,6 @@ class Generator extends TestCase
         $currency = $currency ?: (new CurrencyEntity())->assign([
             'id' => '4c8eba11bd3546d786afbed481a6e665',
             'factor' => 1,
-            'decimalPrecision' => 2,
         ]);
 
         $currency->setFactor(1);
@@ -74,12 +79,6 @@ class Generator extends TestCase
         if (!$currentCustomerGroup) {
             $currentCustomerGroup = new CustomerGroupEntity();
             $currentCustomerGroup->setId(TestDefaults::FALLBACK_CUSTOMER_GROUP);
-            $currentCustomerGroup->setDisplayGross(true);
-        }
-
-        if (!$fallbackCustomerGroup) {
-            $fallbackCustomerGroup = new CustomerGroupEntity();
-            $fallbackCustomerGroup->setId(TestDefaults::FALLBACK_CUSTOMER_GROUP);
             $currentCustomerGroup->setDisplayGross(true);
         }
 
@@ -141,12 +140,11 @@ class Generator extends TestCase
 
         return new SalesChannelContext(
             $baseContext,
-            Uuid::randomHex(),
-            Uuid::randomHex(),
+            $token ?? Uuid::randomHex(),
+            $domainId ?? Uuid::randomHex(),
             $salesChannel,
             $currency,
             $currentCustomerGroup,
-            $fallbackCustomerGroup,
             $taxes,
             $paymentMethod,
             $shippingMethod,
@@ -189,7 +187,7 @@ class Generator extends TestCase
 
     public static function createCart(): Cart
     {
-        $cart = new Cart('test', 'test');
+        $cart = new Cart('test');
         $cart->setLineItems(
             new LineItemCollection([
                 (new LineItem('A', 'product', 'A', 27))

@@ -2,6 +2,9 @@
 
 namespace Shopware\Core;
 
+use Shopware\Core\Framework\Log\Package;
+
+#[Package('core')]
 final class SalesChannelRequest
 {
     public const ATTRIBUTE_IS_SALES_CHANNEL_REQUEST = '_is_sales_channel';
@@ -27,10 +30,6 @@ final class SalesChannelRequest
     public const ATTRIBUTE_CANONICAL_LINK = 'sw-canonical-link';
 
     public const ATTRIBUTE_STOREFRONT_URL = 'sw-storefront-url';
-
-    public const ATTRIBUTE_CSRF_PROTECTED = 'csrf_protected';
-
-    public const ATTRIBUTE_STORE_API_PROXY = 'sw-store-api-proxy';
 
     private function __construct()
     {

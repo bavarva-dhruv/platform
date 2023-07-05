@@ -9,44 +9,49 @@ use Shopware\Core\Checkout\Cart\Address\Error\ShippingAddressSalutationMissingEr
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartValidatorInterface;
 use Shopware\Core\Checkout\Cart\Error\ErrorCollection;
-use Shopware\Core\Defaults;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Content\Product\State;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use Symfony\Contracts\Service\ResetInterface;
 
-class AddressValidator implements CartValidatorInterface
+#[Package('checkout')]
+class AddressValidator implements CartValidatorInterface, ResetInterface
 {
-    private EntityRepositoryInterface $repository;
-
     /**
      * @var array<string, bool>
      */
     private array $available = [];
 
-    public function __construct(EntityRepositoryInterface $repository)
+    /**
+     * @internal
+     */
+    public function __construct(private readonly EntityRepository $repository)
     {
-        $this->repository = $repository;
     }
 
     public function validate(Cart $cart, ErrorCollection $errors, SalesChannelContext $context): void
     {
         $country = $context->getShippingLocation()->getCountry();
         $customer = $context->getCustomer();
+        $validateShipping = $cart->getLineItems()->count() === 0
+            || $cart->getLineItems()->hasLineItemWithState(State::IS_PHYSICAL);
 
-        if (!$country->getActive()) {
+        if (!$country->getActive() && $validateShipping) {
             $errors->add(new ShippingAddressBlockedError((string) $country->getTranslation('name')));
 
             return;
         }
 
-        if (!$country->getShippingAvailable()) {
+        if (!$country->getShippingAvailable() && $validateShipping) {
             $errors->add(new ShippingAddressBlockedError((string) $country->getTranslation('name')));
 
             return;
         }
 
-        if (!$this->isSalesChannelCountry($country->getId(), $context)) {
+        if (!$this->isSalesChannelCountry($country->getId(), $context) && $validateShipping) {
             $errors->add(new ShippingAddressBlockedError((string) $country->getTranslation('name')));
 
             return;
@@ -56,7 +61,7 @@ class AddressValidator implements CartValidatorInterface
             return;
         }
 
-        if (!$this->isValidSalutationId($customer->getSalutationId())) {
+        if (!$customer->getSalutationId()) {
             $errors->add(new ProfileSalutationMissingError($customer));
 
             return;
@@ -67,15 +72,20 @@ class AddressValidator implements CartValidatorInterface
             return;
         }
 
-        if (!$this->isValidSalutationId($customer->getActiveBillingAddress()->getSalutationId())) {
+        if (!$customer->getActiveBillingAddress()->getSalutationId()) {
             $errors->add(new BillingAddressSalutationMissingError($customer->getActiveBillingAddress()));
 
             return;
         }
 
-        if (!$this->isValidSalutationId($customer->getActiveShippingAddress()->getSalutationId())) {
+        if (!$customer->getActiveShippingAddress()->getSalutationId() && $validateShipping) {
             $errors->add(new ShippingAddressSalutationMissingError($customer->getActiveShippingAddress()));
         }
+    }
+
+    public function reset(): void
+    {
+        $this->available = [];
     }
 
     private function isSalesChannelCountry(string $countryId, SalesChannelContext $context): bool
@@ -90,10 +100,5 @@ class AddressValidator implements CartValidatorInterface
         $salesChannelCountryIds = $this->repository->searchIds($criteria, $context->getContext());
 
         return $this->available[$countryId] = $salesChannelCountryIds->has($countryId);
-    }
-
-    private function isValidSalutationId(?string $salutationId = null): bool
-    {
-        return $salutationId !== null && $salutationId !== Defaults::SALUTATION;
     }
 }

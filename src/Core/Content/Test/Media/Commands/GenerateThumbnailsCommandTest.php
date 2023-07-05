@@ -6,36 +6,40 @@ use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Media\Aggregate\MediaThumbnail\MediaThumbnailEntity;
 use Shopware\Core\Content\Media\Commands\GenerateThumbnailsCommand;
 use Shopware\Core\Content\Media\MediaEntity;
+use Shopware\Core\Content\Media\MediaException;
 use Shopware\Core\Content\Media\Message\UpdateThumbnailsMessage;
 use Shopware\Core\Content\Media\Pathname\UrlGeneratorInterface;
 use Shopware\Core\Content\Media\Thumbnail\ThumbnailService;
 use Shopware\Core\Content\Test\Media\MediaFixtures;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
+use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Test\TestCaseBase\CommandTestBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
+use Shopware\Core\Test\CollectingMessageBus;
 use Symfony\Component\Console\Input\StringInput;
 use Symfony\Component\Console\Output\BufferedOutput;
-use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\MessageBusInterface;
 
+/**
+ * @internal
+ */
 class GenerateThumbnailsCommandTest extends TestCase
 {
-    use IntegrationTestBehaviour;
     use CommandTestBehaviour;
+    use IntegrationTestBehaviour;
     use MediaFixtures;
 
     /**
-     * @var EntityRepositoryInterface
+     * @var EntityRepository
      */
     private $mediaRepository;
 
     /**
-     * @var EntityRepositoryInterface
+     * @var EntityRepository
      */
     private $mediaFolderRepository;
 
@@ -49,15 +53,12 @@ class GenerateThumbnailsCommandTest extends TestCase
      */
     private $urlGenerator;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
     /**
-     * @var array
+     * @var array<string>
      */
-    private $initialMediaIds;
+    private array $initialMediaIds;
 
     protected function setUp(): void
     {
@@ -67,7 +68,9 @@ class GenerateThumbnailsCommandTest extends TestCase
         $this->thumbnailCommand = $this->getContainer()->get(GenerateThumbnailsCommand::class);
         $this->context = Context::createDefaultContext();
 
-        $this->initialMediaIds = $this->mediaRepository->searchIds(new Criteria(), $this->context)->getIds();
+        /** @var array<string> $ids */
+        $ids = $this->mediaRepository->searchIds(new Criteria(), $this->context)->getIds();
+        $this->initialMediaIds = $ids;
     }
 
     public function testExecuteHappyPath(): void
@@ -87,6 +90,7 @@ class GenerateThumbnailsCommandTest extends TestCase
         /** @var MediaEntity $updatedMedia */
         foreach ($mediaResult->getEntities() as $updatedMedia) {
             $thumbnails = $updatedMedia->getThumbnails();
+            static::assertNotNull($thumbnails);
             static::assertEquals(
                 2,
                 $thumbnails->count()
@@ -115,6 +119,7 @@ class GenerateThumbnailsCommandTest extends TestCase
         /** @var MediaEntity $updatedMedia */
         foreach ($mediaResult->getEntities() as $updatedMedia) {
             $thumbnails = $updatedMedia->getThumbnails();
+            static::assertNotNull($thumbnails);
             static::assertEquals(
                 2,
                 $thumbnails->count()
@@ -142,8 +147,9 @@ class GenerateThumbnailsCommandTest extends TestCase
         $mediaResult = $this->getNewMediaEntities();
         /** @var MediaEntity $updatedMedia */
         foreach ($mediaResult->getEntities() as $updatedMedia) {
-            if (mb_strpos($updatedMedia->getMimeType(), 'image') === 0) {
+            if (str_starts_with((string) $updatedMedia->getMimeType(), 'image')) {
                 $thumbnails = $updatedMedia->getThumbnails();
+                static::assertNotNull($thumbnails);
                 static::assertEquals(
                     2,
                     $thumbnails->count()
@@ -169,6 +175,7 @@ class GenerateThumbnailsCommandTest extends TestCase
         /** @var MediaEntity $updatedMedia */
         foreach ($mediaResult->getEntities() as $updatedMedia) {
             $thumbnails = $updatedMedia->getThumbnails();
+            static::assertNotNull($thumbnails);
             static::assertEquals(2, $thumbnails->count());
 
             foreach ($thumbnails as $thumbnail) {
@@ -194,15 +201,17 @@ class GenerateThumbnailsCommandTest extends TestCase
         $this->runCommand($this->thumbnailCommand, $input, $output);
 
         $mediaResult = $this->getNewMediaEntities();
+        /** @var MediaEntity $updatedMedia */
         foreach ($mediaResult->getEntities() as $updatedMedia) {
             $thumbnails = $updatedMedia->getThumbnails();
+            static::assertNotNull($thumbnails);
             static::assertEquals(0, $thumbnails->count());
         }
     }
 
     public function testCommandAbortsIfNoFolderCanBeFound(): void
     {
-        $this->expectException(\UnexpectedValueException::class);
+        $this->expectException(MediaException::class);
         $this->expectExceptionMessage('Could not find a folder with the name: "non-existing-folder"');
 
         $input = new StringInput('--folder-name="non-existing-folder"');
@@ -212,8 +221,10 @@ class GenerateThumbnailsCommandTest extends TestCase
 
     public function testItThrowsExceptionOnNonNumericLimit(): void
     {
-        $this->expectException(\Exception::class);
-        $input = new StringInput('-i test');
+        $this->expectException(MediaException::class);
+        $this->expectExceptionMessage('Provided batch size is invalid.');
+
+        $input = new StringInput('--batch-size "test"');
         $output = new BufferedOutput();
 
         $this->runCommand($this->thumbnailCommand, $input, $output);
@@ -276,30 +287,31 @@ class GenerateThumbnailsCommandTest extends TestCase
 
         $output = new BufferedOutput();
 
-        $affectedMediaIds = array_merge(array_combine($this->initialMediaIds, $this->initialMediaIds), $newMedia->getIds());
+        $affectedMediaIds = [...array_combine($this->initialMediaIds, $this->initialMediaIds), ...$newMedia->getIds()];
 
         $expectedMessageStrict = new UpdateThumbnailsMessage();
-        $expectedMessageStrict->withContext($this->context);
+
+        if (Feature::isActive('v6.6.0.0')) {
+            $expectedMessageStrict->setContext($this->context);
+        } else {
+            $expectedMessageStrict->withContext($this->context);
+        }
+
         $expectedMessageStrict->setIsStrict(true);
         $expectedMessageStrict->setMediaIds($affectedMediaIds);
 
         $expectedMessageNonStrict = new UpdateThumbnailsMessage();
-        $expectedMessageNonStrict->withContext($this->context);
+
+        if (Feature::isActive('v6.6.0.0')) {
+            $expectedMessageNonStrict->setContext($this->context);
+        } else {
+            $expectedMessageNonStrict->withContext($this->context);
+        }
+
         $expectedMessageNonStrict->setIsStrict(false);
         $expectedMessageNonStrict->setMediaIds($affectedMediaIds);
 
-        $messageBusMock = $this->getMockBuilder(MessageBusInterface::class)
-            ->disableOriginalConstructor()->getMock();
-        $messageBusMock->expects(static::exactly(4))->method('dispatch')
-            ->withConsecutive(
-                [$expectedMessageStrict, static::anything()],
-                [$expectedMessageNonStrict, static::anything()],
-                [$expectedMessageNonStrict, static::anything()],
-                [$expectedMessageStrict, static::anything()],
-            )
-            ->willReturnCallback(function ($m, $s) {
-                return Envelope::wrap($m, $s);
-            });
+        $messageBusMock = new CollectingMessageBus();
 
         $command = new GenerateThumbnailsCommand(
             $this->getContainer()->get(ThumbnailService::class),
@@ -312,6 +324,14 @@ class GenerateThumbnailsCommandTest extends TestCase
         $this->runCommand($command, new StringInput('--async'), $output);
         $this->runCommand($command, new StringInput('--async'), $output);
         $this->runCommand($command, new StringInput('--strict --async'), $output);
+
+        $envelopes = $messageBusMock->getMessages();
+        static::assertCount(4, $envelopes);
+
+        static::assertEquals($expectedMessageStrict, $envelopes[0]->getMessage());
+        static::assertEquals($expectedMessageNonStrict, $envelopes[1]->getMessage());
+        static::assertEquals($expectedMessageNonStrict, $envelopes[2]->getMessage());
+        static::assertEquals($expectedMessageStrict, $envelopes[3]->getMessage());
     }
 
     protected function assertThumbnailExists(MediaEntity $media, MediaThumbnailEntity $thumbnail): void
@@ -330,13 +350,13 @@ class GenerateThumbnailsCommandTest extends TestCase
         $mediaJpg = $this->getJpgWithFolder();
 
         $filePath = $this->urlGenerator->getRelativeMediaUrl($mediaPng);
-        $this->getPublicFilesystem()->putStream(
+        $this->getPublicFilesystem()->writeStream(
             $filePath,
             fopen(__DIR__ . '/../fixtures/shopware-logo.png', 'rb')
         );
 
         $filePath = $this->urlGenerator->getRelativeMediaUrl($mediaJpg);
-        $this->getPublicFilesystem()->putStream(
+        $this->getPublicFilesystem()->writeStream(
             $filePath,
             fopen(__DIR__ . '/../fixtures/shopware.jpg', 'rb')
         );
@@ -356,13 +376,13 @@ class GenerateThumbnailsCommandTest extends TestCase
         ], $this->context);
 
         $filePath = $this->urlGenerator->getRelativeMediaUrl($mediaPdf);
-        $this->getPublicFilesystem()->putStream(
+        $this->getPublicFilesystem()->writeStream(
             $filePath,
             fopen(__DIR__ . '/../fixtures/small.pdf', 'rb')
         );
 
         $filePath = $this->urlGenerator->getRelativeMediaUrl($mediaJpg);
-        $this->getPublicFilesystem()->putStream($filePath, fopen(__DIR__ . '/../fixtures/shopware.jpg', 'rb'));
+        $this->getPublicFilesystem()->writeStream($filePath, fopen(__DIR__ . '/../fixtures/shopware.jpg', 'rb'));
     }
 
     private function getNewMediaEntities(): EntitySearchResult

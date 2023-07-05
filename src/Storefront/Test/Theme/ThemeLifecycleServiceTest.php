@@ -4,60 +4,49 @@ namespace Shopware\Storefront\Test\Theme;
 
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Content\Media\Aggregate\MediaFolder\MediaFolderCollection;
+use Shopware\Core\Content\Media\MediaCollection;
 use Shopware\Core\Content\Media\MediaEntity;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\CloneBehavior;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageEntity;
+use Shopware\Core\System\Locale\LocaleEntity;
 use Shopware\Storefront\Test\Theme\fixtures\ThemeWithFileAssociations\ThemeWithFileAssociations;
 use Shopware\Storefront\Test\Theme\fixtures\ThemeWithLabels\ThemeWithLabels;
 use Shopware\Storefront\Theme\Aggregate\ThemeTranslationCollection;
 use Shopware\Storefront\Theme\Aggregate\ThemeTranslationEntity;
 use Shopware\Storefront\Theme\StorefrontPluginConfiguration\StorefrontPluginConfiguration;
 use Shopware\Storefront\Theme\StorefrontPluginConfiguration\StorefrontPluginConfigurationFactory;
+use Shopware\Storefront\Theme\ThemeCollection;
 use Shopware\Storefront\Theme\ThemeEntity;
 use Shopware\Storefront\Theme\ThemeLifecycleService;
 
+/**
+ * @internal
+ */
 class ThemeLifecycleServiceTest extends TestCase
 {
     use IntegrationTestBehaviour;
 
-    /**
-     * @var ThemeLifecycleService
-     */
-    private $themeLifecycleService;
+    private ThemeLifecycleService $themeLifecycleService;
 
-    /**
-     * @var Context
-     */
-    private $context;
+    private Context $context;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $themeRepository;
+    private EntityRepository $themeRepository;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $mediaRepository;
+    private EntityRepository $mediaRepository;
 
-    /**
-     * @var EntityRepositoryInterface
-     */
-    private $mediaFolderRepository;
+    private EntityRepository $mediaFolderRepository;
 
-    /**
-     * @var Connection
-     */
-    private $connection;
+    private Connection $connection;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         $this->themeLifecycleService = $this->getContainer()->get(ThemeLifecycleService::class);
         $this->themeRepository = $this->getContainer()->get('theme.repository');
@@ -76,6 +65,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $themeEntity = $this->getTheme($bundle);
 
         static::assertTrue($themeEntity->isActive());
+        static::assertInstanceOf(MediaCollection::class, $themeEntity->getMedia());
         static::assertEquals(2, $themeEntity->getMedia()->count());
 
         $themeDefaultFolderId = $this->getThemeMediaDefaultFolderId();
@@ -99,6 +89,27 @@ class ThemeLifecycleServiceTest extends TestCase
         static::assertEquals($parentThemeEntity->getId(), $themeEntity->getParentThemeId());
     }
 
+    public function testThemeRefreshWithParentTheme(): void
+    {
+        $parentBundle = $this->getThemeConfigWithLabels();
+        $this->themeLifecycleService->refreshTheme($parentBundle, $this->context);
+        $bundle = $this->getThemeConfig();
+        $bundle->setConfigInheritance(['@' . $parentBundle->getTechnicalName()]);
+
+        $this->themeLifecycleService->refreshTheme($bundle, $this->context);
+
+        $parentThemeEntity = $this->getTheme($parentBundle);
+        $themeEntity = $this->getTheme($bundle);
+
+        static::assertEquals($parentThemeEntity->getId(), $themeEntity->getParentThemeId());
+
+        $bundle->setConfigInheritance([]);
+        $this->themeLifecycleService->refreshTheme($parentBundle, $this->context);
+
+        $themeEntity = $this->getTheme($bundle);
+        static::assertEquals($parentThemeEntity->getId(), $themeEntity->getParentThemeId());
+    }
+
     public function testYouCanUpdateConfigToAddNewMedia(): void
     {
         $bundle = $this->getThemeConfig();
@@ -111,6 +122,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $themeEntity = $this->getTheme($bundle);
 
         static::assertTrue($themeEntity->isActive());
+        static::assertInstanceOf(MediaCollection::class, $themeEntity->getMedia());
         static::assertEquals(5, $themeEntity->getMedia()->count());
     }
 
@@ -143,6 +155,7 @@ class ThemeLifecycleServiceTest extends TestCase
 
         $themeEntity = $this->getTheme($bundle);
 
+        static::assertInstanceOf(MediaCollection::class, $themeEntity->getMedia());
         $renamedShopwareLogoId = $this->getMedia('shopware_logo_(1)');
         static::assertNotNull($themeEntity->getMedia()->get($renamedShopwareLogoId->getId()));
     }
@@ -152,7 +165,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $bundle = $this->getThemeConfig();
         $themeMediaDefaultFolderId = $this->getThemeMediaDefaultFolderId();
 
-        $this->connection->executeUpdate('
+        $this->connection->executeStatement('
             UPDATE `media`
             SET `media_folder_id` = null
             WHERE `media_folder_id` = :defaultThemeFolder
@@ -164,6 +177,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $themeEntity = $this->getTheme($bundle);
 
         static::assertTrue($themeEntity->isActive());
+        static::assertInstanceOf(MediaCollection::class, $themeEntity->getMedia());
         static::assertEquals(2, $themeEntity->getMedia()->count());
 
         foreach ($themeEntity->getMedia() as $media) {
@@ -207,6 +221,7 @@ class ThemeLifecycleServiceTest extends TestCase
 
         $theme = $this->getTheme($bundle);
 
+        static::assertInstanceOf(ThemeTranslationCollection::class, $theme->getTranslations());
         static::assertCount(1, $theme->getTranslations());
         static::assertEquals('en-GB', $theme->getTranslations()->first()->getLanguage()->getLocale()->getCode());
         static::assertEquals([
@@ -226,6 +241,7 @@ class ThemeLifecycleServiceTest extends TestCase
 
         $theme = $this->getTheme($bundle);
 
+        static::assertInstanceOf(ThemeTranslationCollection::class, $theme->getTranslations());
         static::assertCount(2, $theme->getTranslations());
         $translation = $this->getTranslationByLocale('xx-XX', $theme->getTranslations());
         static::assertEquals([
@@ -251,6 +267,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $this->themeLifecycleService->refreshTheme($bundle, $this->context);
 
         $themeEntity = $this->getTheme($bundle);
+        static::assertInstanceOf(MediaCollection::class, $themeEntity->getMedia());
         $themeMedia = $themeEntity->getMedia();
         $ids = $themeMedia->getIds();
 
@@ -265,7 +282,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $this->themeLifecycleService->removeTheme($bundle->getTechnicalName(), $this->context);
 
         // check whether the theme is no longer in the table and the associated media have been deleted
-        static::assertNull($this->getTheme($bundle));
+        static::assertFalse($this->hasTheme($bundle));
         static::assertCount(0, $this->mediaRepository->searchIds(new Criteria($ids), Context::createDefaultContext())->getIds());
     }
 
@@ -278,6 +295,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $themeEntity = $this->getTheme($bundle, true);
         $childId = Uuid::randomHex();
 
+        static::assertInstanceOf(ThemeCollection::class, $themeEntity->getDependentThemes());
         // check if we have no dependent Themes
         static::assertEquals(0, $themeEntity->getDependentThemes()->count());
 
@@ -292,10 +310,12 @@ class ThemeLifecycleServiceTest extends TestCase
         $themeEntity = $this->getTheme($bundle, true);
 
         $themeMedia = $themeEntity->getMedia();
+        static::assertInstanceOf(MediaCollection::class, $themeMedia);
         $ids = $themeMedia->getIds();
 
         static::assertTrue($themeEntity->isActive());
         static::assertEquals(2, $themeMedia->count());
+        static::assertInstanceOf(ThemeCollection::class, $themeEntity->getDependentThemes());
         static::assertEquals(1, $themeEntity->getDependentThemes()->count());
 
         $themeDefaultFolderId = $this->getThemeMediaDefaultFolderId();
@@ -306,7 +326,7 @@ class ThemeLifecycleServiceTest extends TestCase
         $this->themeLifecycleService->removeTheme($bundle->getTechnicalName(), $this->context);
 
         // check whether the theme is no longer in the table and the associated media have been deleted
-        static::assertNull($this->getTheme($bundle));
+        static::assertFalse($this->hasTheme($bundle));
         static::assertCount(0, $this->mediaRepository->searchIds(new Criteria($ids), Context::createDefaultContext())->getIds());
         static::assertEquals(0, $this->themeRepository->search(new Criteria([$childId, $themeEntity->getId()]), $this->context)->count());
     }
@@ -325,7 +345,7 @@ class ThemeLifecycleServiceTest extends TestCase
         return $factory->createFromBundle(new ThemeWithLabels());
     }
 
-    private function getTheme(StorefrontPluginConfiguration $bundle, $withChild = false): ?ThemeEntity
+    private function getTheme(StorefrontPluginConfiguration $bundle, bool $withChild = false): ThemeEntity
     {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('technicalName', $bundle->getTechnicalName()));
@@ -336,16 +356,29 @@ class ThemeLifecycleServiceTest extends TestCase
             $criteria->addAssociation('dependentThemes');
         }
 
-        return $this->themeRepository->search($criteria, $this->context)->getEntities()->first();
+        $theme = $this->themeRepository->search($criteria, $this->context)->getEntities()->first();
+        static::assertInstanceOf(ThemeEntity::class, $theme);
+
+        return $theme;
     }
 
-    private function getMedia(string $fileName): ?MediaEntity
+    private function hasTheme(StorefrontPluginConfiguration $bundle): bool
+    {
+        $criteria = new Criteria();
+        $criteria->addFilter(new EqualsFilter('technicalName', $bundle->getTechnicalName()));
+
+        return $this->themeRepository->searchIds($criteria, $this->context)->getTotal() > 0;
+    }
+
+    private function getMedia(string $fileName): MediaEntity
     {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('fileName', $fileName));
 
-        // will throw if media does not exists
-        return $this->mediaRepository->search($criteria, $this->context)->first();
+        $media = $this->mediaRepository->search($criteria, $this->context)->first();
+        static::assertInstanceOf(MediaEntity::class, $media);
+
+        return $media;
     }
 
     // we create a cms-page because it has has the DeleteRestricted flag in media definition
@@ -377,7 +410,7 @@ class ThemeLifecycleServiceTest extends TestCase
 
     private function deleteLanguageForLocale(string $locale): void
     {
-        /** @var EntityRepositoryInterface $languageRepository */
+        /** @var EntityRepository $languageRepository */
         $languageRepository = $this->getContainer()->get('language.repository');
         $context = Context::createDefaultContext();
 
@@ -393,7 +426,7 @@ class ThemeLifecycleServiceTest extends TestCase
 
     private function changeDefaultLanguageLocale(string $locale): void
     {
-        /** @var EntityRepositoryInterface $languageRepository */
+        /** @var EntityRepository $languageRepository */
         $languageRepository = $this->getContainer()->get('language.repository');
         $context = Context::createDefaultContext();
 
@@ -403,7 +436,7 @@ class ThemeLifecycleServiceTest extends TestCase
         /** @var LanguageEntity $language */
         $language = $languageRepository->search($criteria, $context)->first();
 
-        /** @var EntityRepositoryInterface $localeRepository */
+        /** @var EntityRepository $localeRepository */
         $localeRepository = $this->getContainer()->get('locale.repository');
 
         $localeRepository->upsert([
@@ -417,17 +450,21 @@ class ThemeLifecycleServiceTest extends TestCase
     private function getTranslationByLocale(string $locale, ThemeTranslationCollection $translations): ThemeTranslationEntity
     {
         return $translations->filter(static function (ThemeTranslationEntity $translation) use ($locale): bool {
+            static::assertInstanceOf(LanguageEntity::class, $translation->getLanguage());
+            static::assertInstanceOf(LocaleEntity::class, $translation->getLanguage()->getLocale());
+
             return $locale === $translation->getLanguage()->getLocale()->getCode();
         })->first();
     }
 
-    private function getThemeMediaDefaultFolderId(): ?string
+    private function getThemeMediaDefaultFolderId(): string
     {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('media_folder.defaultFolder.entity', 'theme'));
         $criteria->addAssociation('defaultFolder');
         $criteria->setLimit(1);
-        $defaultFolder = $this->mediaFolderRepository->search($criteria, $this->context);
+        /** @var MediaFolderCollection $defaultFolder */
+        $defaultFolder = $this->mediaFolderRepository->search($criteria, $this->context)->getEntities();
 
         if ($defaultFolder->count() !== 1) {
             throw new \RuntimeException('Default Theme folder does not exist.');

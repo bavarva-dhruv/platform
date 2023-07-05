@@ -1,10 +1,10 @@
 import template from './sw-promotion-v2-settings-discount-type.html.twig';
 import './sw-promotion-v2-settings-discount-type.scss';
 
-const { Component } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-promotion-v2-settings-discount-type', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: [
@@ -94,7 +94,7 @@ Component.register('sw-promotion-v2-settings-discount-type', {
         },
 
         currencyCriteria() {
-            return (new Criteria())
+            return (new Criteria(1, 25))
                 .addSorting(Criteria.sort('name', 'ASC'));
         },
 
@@ -280,4 +280,4 @@ Component.register('sw-promotion-v2-settings-discount-type', {
             this.displayAdvancedPricesModal = false;
         },
     },
-});
+};

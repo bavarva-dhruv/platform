@@ -3,10 +3,17 @@
 namespace Shopware\Core\Content\Category\Tree;
 
 use Shopware\Core\Content\Category\CategoryEntity;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\Struct;
 
+#[Package('content')]
 class TreeItem extends Struct
 {
+    /**
+     * @internal public to allow AfterSort::sort()
+     */
+    public ?string $afterId;
+
     /**
      * @var CategoryEntity
      */
@@ -17,15 +24,24 @@ class TreeItem extends Struct
      */
     protected $children;
 
-    public function __construct(?CategoryEntity $category, array $children)
-    {
+    public function __construct(
+        ?CategoryEntity $category,
+        array $children
+    ) {
         $this->category = $category;
         $this->children = $children;
+        $this->afterId = $category ? $category->getAfterCategoryId() : null;
+    }
+
+    public function getId(): string
+    {
+        return $this->category->getId();
     }
 
     public function setCategory(CategoryEntity $category): void
     {
         $this->category = $category;
+        $this->afterId = $category->getAfterCategoryId();
     }
 
     public function getCategory(): CategoryEntity

@@ -1,4 +1,6 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_text_field %}
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_url_field %}
 <sw-contextual-field
     class="sw-field--url"
@@ -17,12 +19,12 @@
         >
             <sw-icon
                 v-if="sslActive"
-                name="default-lock-closed"
+                name="regular-lock"
                 :small="true"
             />
             <sw-icon
                 v-else
-                name="default-lock-open"
+                name="regular-lock-open"
                 :small="true"
             />
             {{ urlPrefix }}
@@ -39,7 +41,6 @@
             :value="currentValue|unicodeUri"
             :placeholder="placeholder"
             :disabled="disabled"
-            @input="onInput"
             @focus="setFocusClass"
             @blur="onBlur($event); removeFocusClass();"
         >
@@ -59,6 +60,10 @@
 
     <template #label>
         <slot name="label"></slot>
+    </template>
+
+    <template #hint>
+        <slot name="hint"></slot>
     </template>
 
 </sw-contextual-field>

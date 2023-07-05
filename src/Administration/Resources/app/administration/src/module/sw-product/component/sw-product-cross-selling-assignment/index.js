@@ -1,11 +1,16 @@
+/*
+ * @package inventory
+ */
+
 import template from './sw-product-cross-selling-assignment.html.twig';
 import './sw-product-cross-selling-assignment.scss';
 
 const { mapGetters, mapState } = Shopware.Component.getComponentHelper();
-const { Component, Context } = Shopware;
+const { Context } = Shopware;
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-product-cross-selling-assignment', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory'],
@@ -61,7 +66,7 @@ Component.register('sw-product-cross-selling-assignment', {
         },
 
         searchCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
 
             criteria.addFilter(Criteria.not('and', [Criteria.equals('id', this.product.id)]));
             criteria.addFilter(Criteria.multi('or', [
@@ -124,7 +129,7 @@ Component.register('sw-product-cross-selling-assignment', {
         },
 
         variantCriteria() {
-            const criteria = new Criteria();
+            const criteria = new Criteria(1, 25);
             criteria.setIds(this.variantProductIds);
 
             return criteria;
@@ -166,7 +171,7 @@ Component.register('sw-product-cross-selling-assignment', {
                 newProduct.position = this.assignedProducts.length + 1;
                 this.assignedProducts.add(newProduct);
 
-                const criteria = new Criteria();
+                const criteria = new Criteria(1, 25);
                 criteria.addAssociation('options.group');
 
                 this.productRepository.get(productId, { ...Context.api, inheritance: true }, criteria).then((product) => {
@@ -193,4 +198,4 @@ Component.register('sw-product-cross-selling-assignment', {
             return this.assignedProducts.some(p => p.productId === item.id);
         },
     },
-});
+};

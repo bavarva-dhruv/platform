@@ -1,10 +1,14 @@
 import template from './sw-order-select-document-type-modal.html.twig';
 import './sw-order-select-document-type-modal.scss';
 
-const { Component } = Shopware;
+/**
+ * @package customer-order
+ */
+
 const { Criteria } = Shopware.Data;
 
-Component.register('sw-order-select-document-type-modal', {
+// eslint-disable-next-line sw-deprecation-rules/private-feature-declarations
+export default {
     template,
 
     inject: ['repositoryFactory'],
@@ -66,7 +70,6 @@ Component.register('sw-order-select-document-type-modal', {
         documentCriteria() {
             const criteria = new Criteria(1, 100);
             criteria.addFilter(Criteria.equals('order.id', this.order.id));
-            criteria.addFilter(Criteria.equals('order.versionId', this.order.versionId));
             criteria.addFilter(Criteria.equals('documentType.technicalName', 'invoice'));
 
             return criteria;
@@ -138,4 +141,4 @@ Component.register('sw-order-select-document-type-modal', {
             this.$emit('change', this.documentTypeCollection.get(this.documentType));
         },
     },
-});
+};

@@ -2,14 +2,12 @@
 
 namespace Shopware\Core\System\SalesChannel\SalesChannel;
 
-use OpenApi\Annotations as OA;
-use Shopware\Core\Checkout\Cart\Exception\CustomerNotLoggedInException;
+use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Validation\EntityExists;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Routing\Annotation\RouteScope;
-use Shopware\Core\Framework\Routing\Annotation\Since;
 use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 use Shopware\Core\Framework\Validation\DataValidationDefinition;
 use Shopware\Core\Framework\Validation\DataValidator;
@@ -21,9 +19,8 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
-/**
- * @RouteScope(scopes={"store-api"})
- */
+#[Route(defaults: ['_routeScope' => ['store-api']])]
+#[Package('core')]
 class ContextSwitchRoute extends AbstractContextSwitchRoute
 {
     private const SHIPPING_METHOD_ID = SalesChannelContextService::SHIPPING_METHOD_ID;
@@ -46,18 +43,15 @@ class ContextSwitchRoute extends AbstractContextSwitchRoute
     protected $validator;
 
     /**
-     * @var EventDispatcherInterface
+     * @internal
      */
-    private $eventDispatcher;
-
     public function __construct(
         DataValidator $validator,
         SalesChannelContextPersister $contextPersister,
-        EventDispatcherInterface $eventDispatcher
+        private readonly EventDispatcherInterface $eventDispatcher
     ) {
         $this->contextPersister = $contextPersister;
         $this->validator = $validator;
-        $this->eventDispatcher = $eventDispatcher;
     }
 
     public function getDecorated(): AbstractContextSwitchRoute
@@ -65,35 +59,7 @@ class ContextSwitchRoute extends AbstractContextSwitchRoute
         throw new DecorationPatternException(self::class);
     }
 
-    /**
-     * @Since("6.2.0.0")
-     * @OA\Patch(
-     *      path="/context",
-     *      summary="Modify the current context",
-     *      description="Used for switching the context. A typical example would be changing the language or changing the currency.",
-     *      operationId="updateContext",
-     *      tags={"Store API","System & Context"},
-     *      @OA\RequestBody(
-     *          required=true,
-     *          @OA\JsonContent(
-     *              @OA\Property(property="currencyId", description="Currency", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="languageId", description="Language", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="billingAddressId", description="Billing Address", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="shippingAddressId", description="Shipping Address", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="paymentMethodId", description="Payment Method", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="shippingMethodId", description="Shipping Method", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="countryId", description="Country", type="string", pattern="^[0-9a-f]{32}$"),
-     *              @OA\Property(property="countryStateId", description="Country State", type="string", pattern="^[0-9a-f]{32}$")
-     *          )
-     *      ),
-     *      @OA\Response(
-     *          response="200",
-     *          description="Returns the context token. Use that as your `sw-context-token` header for subsequent requests.",
-     *          @OA\JsonContent(ref="#/components/schemas/ContextTokenResponse")
-     *     )
-     * )
-     * @Route("/store-api/context", name="store-api.switch-context", methods={"PATCH"})
-     */
+    #[Route(path: '/store-api/context', name: 'store-api.switch-context', methods: ['PATCH'])]
     public function switchContext(RequestDataBag $data, SalesChannelContext $context): ContextTokenResponse
     {
         $definition = new DataValidationDefinition('context_switch');
@@ -115,11 +81,11 @@ class ContextSwitchRoute extends AbstractContextSwitchRoute
         } else {
             // do not allow to set address ids if the customer is not logged in
             if (isset($parameters[self::SHIPPING_ADDRESS_ID])) {
-                throw new CustomerNotLoggedInException();
+                throw CartException::customerNotLoggedIn();
             }
 
             if (isset($parameters[self::BILLING_ADDRESS_ID])) {
-                throw new CustomerNotLoggedInException();
+                throw CartException::customerNotLoggedIn();
             }
         }
 
@@ -157,11 +123,44 @@ class ContextSwitchRoute extends AbstractContextSwitchRoute
         $this->validator->validate($parameters, $definition);
 
         $customer = $context->getCustomer();
-        $this->contextPersister->save($context->getToken(), $parameters, $context->getSalesChannel()->getId(), $customer ? $customer->getId() : null);
+        $this->contextPersister->save(
+            $context->getToken(),
+            $parameters,
+            $context->getSalesChannel()->getId(),
+            $customer && empty($context->getPermissions()) ? $customer->getId() : null
+        );
+
+        // Language was switched - Check new Domain
+        $changeUrl = $this->checkNewDomain($parameters, $context);
 
         $event = new SalesChannelContextSwitchEvent($context, $data);
         $this->eventDispatcher->dispatch($event);
 
-        return new ContextTokenResponse($context->getToken());
+        return new ContextTokenResponse($context->getToken(), $changeUrl);
+    }
+
+    /**
+     * @param array<mixed> $parameters
+     */
+    private function checkNewDomain(array $parameters, SalesChannelContext $context): ?string
+    {
+        if (
+            !isset($parameters[self::LANGUAGE_ID])
+            || $parameters[self::LANGUAGE_ID] === $context->getLanguageId()
+        ) {
+            return null;
+        }
+
+        $domains = $context->getSalesChannel()->getDomains();
+        if ($domains === null) {
+            return null;
+        }
+
+        $langDomain = $domains->filterByProperty('languageId', $parameters[self::LANGUAGE_ID])->first();
+        if ($langDomain === null) {
+            return null;
+        }
+
+        return $langDomain->getUrl();
     }
 }

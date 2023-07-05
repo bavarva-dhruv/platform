@@ -8,26 +8,32 @@ use Shopware\Core\Checkout\CheckoutRuleScope;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEntity;
 use Shopware\Core\Checkout\Customer\Rule\ShippingZipCodeRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteException;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\Constraint\ArrayOfType;
+use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class ShippingZipCodeRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    private EntityRepositoryInterface $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    private EntityRepositoryInterface $conditionRepository;
+    private EntityRepository $conditionRepository;
 
     private Context $context;
 
@@ -282,11 +288,11 @@ class ShippingZipCodeRuleTest extends TestCase
     {
         $zipCodes = ['90210', '81985'];
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $location = $this->createMock(ShippingLocation::class);
 
         $customerAddress = new CustomerAddressEntity();
         $customerAddress->setZipcode($zipCode);
-        $location->method('getAddress')->willReturn($customerAddress);
+
+        $location = new ShippingLocation(new CountryEntity(), null, $customerAddress);
         $salesChannelContext->method('getShippingLocation')->willReturn($location);
         $scope = new CheckoutRuleScope($salesChannelContext);
         $this->rule->assign(['zipCodes' => $zipCodes, 'operator' => $operator]);
@@ -299,7 +305,10 @@ class ShippingZipCodeRuleTest extends TestCase
         }
     }
 
-    public function getMatchValuesNumeric(): array
+    /**
+     * @return array<string, array<string|bool>>
+     */
+    public static function getMatchValuesNumeric(): array
     {
         return [
             'operator_lt / match / zip code' => [Rule::OPERATOR_LT, true, '56000'],
@@ -316,17 +325,26 @@ class ShippingZipCodeRuleTest extends TestCase
     /**
      * @dataProvider getMatchValuesAlphanumeric
      */
-    public function testRuleMatchingAlphanumeric(string $operator, bool $isMatching, string $zipCode, string $customerZipCode = '9E21L'): void
-    {
+    public function testRuleMatchingAlphanumeric(
+        string $operator,
+        bool $isMatching,
+        ?string $zipCode,
+        string $customerZipCode = '9E21L',
+        bool $noAddress = false
+    ): void {
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $location = $this->createMock(ShippingLocation::class);
 
         $customerAddress = new CustomerAddressEntity();
         $customerAddress->setZipcode($customerZipCode);
-        $location->method('getAddress')->willReturn($customerAddress);
+
+        if ($noAddress) {
+            $customerAddress = null;
+        }
+
+        $location = new ShippingLocation(new CountryEntity(), null, $customerAddress);
         $salesChannelContext->method('getShippingLocation')->willReturn($location);
         $scope = new CheckoutRuleScope($salesChannelContext);
-        $this->rule->assign(['zipCodes' => [$zipCode], 'operator' => $operator]);
+        $this->rule->assign(['zipCodes' => $zipCode ? [$zipCode] : null, 'operator' => $operator]);
 
         $match = $this->rule->match($scope);
         if ($isMatching) {
@@ -336,19 +354,24 @@ class ShippingZipCodeRuleTest extends TestCase
         }
     }
 
-    public function getMatchValuesAlphanumeric(): array
+    /**
+     * @return \Traversable<string, array<string|bool|null>>
+     */
+    public static function getMatchValuesAlphanumeric(): \Traversable
     {
-        return [
-            'operator_eq / not match exact / zip code' => [Rule::OPERATOR_EQ, false, '56GG0'],
-            'operator_eq / match exact / zip code' => [Rule::OPERATOR_EQ, true, '9E21L'],
-            'operator_eq / not match partially / zip code' => [Rule::OPERATOR_EQ, false, '*6A*0'],
-            'operator_eq / match partially / zip code' => [Rule::OPERATOR_EQ, true, 'B*9D*', 'B19D5'],
-            'operator_neq / match exact / zip code' => [Rule::OPERATOR_NEQ, true, '56000'],
-            'operator_neq / not match exact / zip code' => [Rule::OPERATOR_NEQ, false, '9E21L'],
-            'operator_neq / match partially / zip code' => [Rule::OPERATOR_NEQ, true, '*6A*0'],
-            'operator_neq / not match partially / zip code' => [Rule::OPERATOR_NEQ, false, 'B*9D*', 'B19D5'],
-            'operator_empty / not match / zip code' => [Rule::OPERATOR_EMPTY, false, '56GG0'],
-            'operator_empty / match / zip code' => [Rule::OPERATOR_EMPTY, true, ' ', ' '],
-        ];
+        yield 'operator_eq / not match exact / zip code' => [Rule::OPERATOR_EQ, false, '56GG0'];
+        yield 'operator_eq / match exact / zip code' => [Rule::OPERATOR_EQ, true, '9e21l'];
+        yield 'operator_eq / not match partially / zip code' => [Rule::OPERATOR_EQ, false, '*6A*0'];
+        yield 'operator_eq / match partially / zip code' => [Rule::OPERATOR_EQ, true, 'B*9D*', 'B19D5'];
+        yield 'operator_neq / match exact / zip code' => [Rule::OPERATOR_NEQ, true, '56000'];
+        yield 'operator_neq / not match exact / zip code' => [Rule::OPERATOR_NEQ, false, '9E21L'];
+        yield 'operator_neq / match partially / zip code' => [Rule::OPERATOR_NEQ, true, '*6A*0'];
+        yield 'operator_neq / not match partially / zip code' => [Rule::OPERATOR_NEQ, false, 'B*9D*', 'B19D5'];
+        yield 'operator_empty / not match / zip code' => [Rule::OPERATOR_EMPTY, false, '56GG0'];
+        yield 'operator_empty / match / zip code' => [Rule::OPERATOR_EMPTY, true, ' ', ' '];
+        yield 'operator_empty / match null / zip code' => [Rule::OPERATOR_EMPTY, true, null, ' '];
+
+        yield 'operator_neq / match / no address' => [Rule::OPERATOR_NEQ, true, 'ky', '', true];
+        yield 'operator_empty / match / no address' => [Rule::OPERATOR_EMPTY, true, 'ky', '', true];
     }
 }

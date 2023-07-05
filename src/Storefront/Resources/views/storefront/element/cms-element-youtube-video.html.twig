@@ -49,12 +49,13 @@
                 </iframe>
             {% else %}
                 {% set pluginConfiguration = {
+                    cookieName: 'youtube-video',
                     videoUrl: videoUrl,
                     iframeClasses: [ iframeClass ],
                     btnClasses: [ 'btn', 'btn-outline-secondary' ],
                     backdropClasses: [ 'cms-element-youtube-video__backdrop' ],
                     confirmButtonText: 'component.cms.vimeo.acceptButtonLabel'|trans,
-                    overlayText: 'component.cms.vimeo.privacyNotice'|trans({
+                    overlayText: 'component.cms.vimeo.privacyNoticeText'|trans({
                         '%url%': path('frontend.cms.page',{ id: config('core.basicInformation.privacyPage') }),
                         '%platform%': 'YouTube'
                     })|raw

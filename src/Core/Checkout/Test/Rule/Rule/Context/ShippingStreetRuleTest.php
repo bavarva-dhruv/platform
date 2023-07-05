@@ -8,17 +8,22 @@ use Shopware\Core\Checkout\Cart\Delivery\Struct\ShippingLocation;
 use Shopware\Core\Checkout\Cart\Rule\CartRuleScope;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEntity;
 use Shopware\Core\Checkout\Customer\Rule\ShippingStreetRule;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\Country\Aggregate\CountryState\CountryStateEntity;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class ShippingStreetRuleTest extends TestCase
 {
     public function testWithExactMatch(): void
     {
         $rule = (new ShippingStreetRule())->assign(['streetName' => 'example street']);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 
@@ -39,7 +44,7 @@ class ShippingStreetRuleTest extends TestCase
     {
         $rule = (new ShippingStreetRule())->assign(['streetName' => 'ExaMple StreEt']);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 
@@ -60,7 +65,7 @@ class ShippingStreetRuleTest extends TestCase
     {
         $rule = (new ShippingStreetRule())->assign(['streetName' => 'example street']);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 
@@ -81,7 +86,7 @@ class ShippingStreetRuleTest extends TestCase
     {
         $rule = (new ShippingStreetRule())->assign(['streetName' => 'ExaMple StreEt']);
 
-        $cart = $this->createMock(Cart::class);
+        $cart = new Cart('test');
 
         $context = $this->createMock(SalesChannelContext::class);
 

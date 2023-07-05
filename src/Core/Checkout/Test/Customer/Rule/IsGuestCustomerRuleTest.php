@@ -7,21 +7,26 @@ use Shopware\Core\Checkout\CheckoutRuleScope;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Rule\IsGuestCustomerRule;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
+/**
+ * @internal
+ */
+#[Package('business-ops')]
 class IsGuestCustomerRuleTest extends TestCase
 {
-    use KernelTestBehaviour;
     use DatabaseTransactionBehaviour;
+    use KernelTestBehaviour;
 
-    private EntityRepositoryInterface $ruleRepository;
+    private EntityRepository $ruleRepository;
 
-    private EntityRepositoryInterface $conditionRepository;
+    private EntityRepository $conditionRepository;
 
     private Context $context;
 
@@ -58,9 +63,8 @@ class IsGuestCustomerRuleTest extends TestCase
     public function testThatFilledCompanyInformationMatchesToTrue(): void
     {
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $customer = $this->createMock(CustomerEntity::class);
-        $customer->method('getGuest')
-            ->willReturn(true);
+        $customer = new CustomerEntity();
+        $customer->setGuest(true);
 
         $salesChannelContext->method('getCustomer')
             ->willReturn($customer);
@@ -74,7 +78,8 @@ class IsGuestCustomerRuleTest extends TestCase
     public function testThatUnfilledCompanyInformationMatchesToFalse(): void
     {
         $salesChannelContext = $this->createMock(SalesChannelContext::class);
-        $customer = $this->createMock(CustomerEntity::class);
+        $customer = new CustomerEntity();
+        $customer->setGuest(false);
 
         $salesChannelContext->method('getCustomer')
             ->willReturn($customer);

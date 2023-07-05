@@ -1,3 +1,4 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
 {% block sw_price_field %}
 <div
     class="sw-price-field"
@@ -10,6 +11,7 @@
 
     <div class="price-field-grid">
 
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_price_field_gross %}
         {# TODO: check selectors #}
         <sw-field
@@ -30,6 +32,7 @@
             v-bind="$attrs"
             @change="onPriceGrossChange"
             @keyup="keymonitor"
+            @input-change="onPriceGrossInputChange"
         >
             <template
                 v-if="!disableSuffix"
@@ -40,6 +43,7 @@
         </sw-field>
         {% endblock %}
 
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_price_field_lock_button %}
         <button
             class="sw-price-field__lock"
@@ -52,18 +56,19 @@
             <sw-icon
                 v-if="priceForCurrency.linked"
                 key="price-field-locked-indicator"
-                name="default-lock-closed"
+                name="regular-lock"
                 size="16"
             />
             <sw-icon
                 v-else
                 key="price-field-locked-indicator"
-                name="default-lock-open"
+                name="regular-lock-open"
                 size="16"
             />
         </button>
         {% endblock %}
 
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block sw_price_field_net %}
         {# TODO: check selectors #}
         <sw-field
@@ -84,6 +89,7 @@
             v-bind="$attrs"
             @change="onPriceNetChange"
             @keyup="keymonitor"
+            @input-change="onPriceNetInputChange"
         >
             <template
                 v-if="!disableSuffix"
@@ -107,7 +113,7 @@
         >
             {{ $tc('sw-product.detailBase.linkMaintainCurrencyPrices') }}
             <sw-icon
-                name="default-arrow-simple-right"
+                name="regular-long-arrow-right"
                 small
             />
         </a>

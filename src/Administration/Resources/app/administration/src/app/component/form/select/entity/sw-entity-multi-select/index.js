@@ -5,6 +5,9 @@ const { Component, Mixin } = Shopware;
 const { debounce, get } = Shopware.Utils;
 const { Criteria, EntityCollection } = Shopware.Data;
 
+/**
+ * @deprecated tag:v6.6.0 - Will be private
+ */
 Component.register('sw-entity-multi-select', {
     template,
     inheritAttrs: false,
@@ -104,6 +107,26 @@ Component.register('sw-entity-multi-select', {
                 return ['bottom', 'right'].includes(value);
             },
         },
+        advancedSelectionComponent: {
+            type: String,
+            required: false,
+            default() {
+                return '';
+            },
+        },
+        advancedSelectionParameters: {
+            type: Object,
+            required: false,
+            default() {
+                return {};
+            },
+        },
+
+        displayVariants: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
     },
 
     data() {
@@ -114,6 +137,7 @@ Component.register('sw-entity-multi-select', {
             isLoading: false,
             currentCollection: null,
             resultCollection: null,
+            isAdvancedSelectionModalVisible: false,
         };
     },
 
@@ -145,6 +169,10 @@ Component.register('sw-entity-multi-select', {
             }
 
             return Math.max(0, this.totalValuesCount - this.limit);
+        },
+
+        isAdvancedSelectionActive() {
+            return this.advancedSelectionComponent && Component.getComponentRegistry().has(this.advancedSelectionComponent);
         },
     },
 
@@ -237,7 +265,9 @@ Component.register('sw-entity-multi-select', {
         },
 
         resetActiveItem() {
-            this.$refs.swSelectResultList.setActiveItemIndex(0);
+            if (this.$refs.swSelectResultList) {
+                this.$refs.swSelectResultList.setActiveItemIndex(0);
+            }
         },
 
         resetCriteria() {
@@ -351,6 +381,27 @@ Component.register('sw-entity-multi-select', {
             }
 
             return this.selectionDisablingMethod(selection);
+        },
+
+        openAdvancedSelectionModal() {
+            this.isAdvancedSelectionModalVisible = true;
+        },
+
+        closeAdvancedSelectionModal() {
+            this.isAdvancedSelectionModalVisible = false;
+        },
+
+        onAdvancedSelectionSubmit(selectedItems) {
+            const newCollection = this.createEmptyCollection();
+
+            selectedItems.forEach((item) => {
+                newCollection.add(item);
+            });
+
+            this.emitChanges(newCollection);
+
+            this.$refs.selectionList.focus();
+            this.$refs.selectionList.select();
         },
     },
 });

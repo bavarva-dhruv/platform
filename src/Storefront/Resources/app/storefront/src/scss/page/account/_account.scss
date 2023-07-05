@@ -9,7 +9,7 @@
     .account-content-main {
         @extend .col-lg-9;
         @extend .offset-xl-1;
-        @extend .col-xl-7;
+        @extend .col-xl-9;
     }
 }
 
@@ -118,8 +118,7 @@
     }
 }
 
-// @deprecated tag:v6.5.0 - Bootstrap v5 uses the breakpoint itself instead of the next breakpoint in `media-breakpoint-down()`, use `lg` instead of `md`.
-@include media-breakpoint-down(if(feature('V6_5_0_0'), lg, md)) {
+@include media-breakpoint-down(lg) {
     .account-content-aside {
         display: none;
     }
